@@ -1,0 +1,33 @@
+method: ardt
+normalize: false
+train_args:
+  env_name: "connect_four"
+  gamma: 1.0
+  scale: 1.0
+  batch_size: 128
+  cluster_epochs: 6
+  return_epochs: 44
+  
+  ret_obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  
+  obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+
+  return_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0

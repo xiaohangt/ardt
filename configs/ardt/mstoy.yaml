@@ -1,0 +1,33 @@
+method: ardt
+normalize: false
+train_args:
+  env_name: "mstoy"
+  gamma: 1.0
+  scale: 5.0
+  batch_size: 128
+  cluster_epochs: 10
+  return_epochs: 6
+  
+  ret_obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  
+  obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+
+  return_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0

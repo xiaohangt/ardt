@@ -1,0 +1,58 @@
+method: esper
+normalize: false
+dynamics_model_args:
+  hidden_size: 512
+  num_layers: 2
+  activation: "relu"
+  batchnorm: False
+  layernorm: False
+  dropout: 0.0
+cluster_model_args:
+  rep_size: 128
+  groups: 4
+  obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  ret_obs_action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  logit_model:
+    hidden_size: 512
+    num_layers: 1
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  return_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+  action_model:
+    hidden_size: 512
+    num_layers: 2
+    activation: "relu"
+    batchnorm: False
+    layernorm: False
+    dropout: 0.0
+train_args:
+  env_name: "connect_four"
+  gamma: 1.0
+  scale: 1.0
+  dynamics_model_lr: 5e-4
+  cluster_model_lr: 1e-4
+  batch_size: 128
+  cluster_epochs: 6
+  return_epochs: 6
+  adv_loss_weight: 1.0
+  act_loss_weight: 0.05
