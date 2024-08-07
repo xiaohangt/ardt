@@ -150,6 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--env_alpha', type=float, default=0.1)
     parser.add_argument('--num_eval_episodes', type=int, default=100)
     
+    # process args
     args = parser.parse_args()
     variant = vars(args)
     if variant['algo'] == 'bc':
@@ -161,46 +162,46 @@ if __name__ == '__main__':
 
     print("############### Loading ##################")
     task, max_ep_len, env_targets, scale, action_type, env, trajs = \
-        load_env(env_name=args.env_name, 
-            traj_len=args.traj_len,
-            data_name=args.data_name, 
-            data_dir=args.env_data_dir, 
-            test_adv=args.test_adv,
-            added_data_name=args.added_data_name,
-            added_data_prop=args.added_data_prop,
-            env_alpha=args.env_alpha)
+        load_env(env_name=variant['env_name'], 
+            traj_len=variant['traj_len'],
+            data_name=variant['data_name'], 
+            data_dir=variant['env_data_dir'], 
+            test_adv=variant['test_adv'],
+            added_data_name=variant['added_data_name'],
+            added_data_prop=variant['added_data_prop'],
+            env_alpha=variant['env_alpha'])
 
-    if not args.is_collect_data_only:
+    if not variant['is_collect_data_only']:
         print("############### Relabeling ###############")
-        print("Will save relabeled file to", args.ret_file)
-        set_seed_everywhere(args.seed)
+        print("Will save relabeled file to", variant['ret_file'])
+        set_seed_everywhere(variant['seed'])
         
-        if not args.is_testing_only:
-            config, ret_file, device, n_cpu, lr, wd = args.config, args.ret_file, args.device, args.n_cpu, args.lr, args.wd
-            if args.algo == 'ardt':
-                generate_maxmin(env, args.env_name, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_simple_model, args.batch_size, args.leaf_weight, args.alpha)
-            elif args.algo == 'dt' or args.algo == 'bc':
+        if not variant['is_testing_only']:
+            config, ret_file, device, n_cpu, lr, wd = variant['config'], variant['ret_file'], variant['device'], variant['n_cpu'], variant['lr'], variant['wd']
+            if variant['algo'] == 'ardt':
+                generate_maxmin(env, variant['env_name'], trajs, config, ret_file, device, n_cpu, lr, wd, variant['is_simple_model'], variant['batch_size'], variant['leaf_weight'], variant['alpha'])
+            elif variant['algo'] == 'dt' or variant['algo'] == 'bc':
                 pass
-            elif args.algo == 'esper':
-                generate(env, trajs, config, ret_file, device, n_cpu=args.n_cpu)
+            elif variant['algo'] == 'esper':
+                generate(env, trajs, config, ret_file, device, n_cpu=variant['n_cpu'])
             else:
                 raise Exception('Algo error')
 
         print("############### Training ###############")
         print()
 
-        advs = [args.test_adv]
-        if variant['is_testing_only'] and args.env_name in ['halfcheetah', 'hopper', 'walker2d']:
-            if "env" not in args.test_adv:
-                advs = [args.test_adv[:-1] + str(adv) for adv in range(8)]
+        advs = [variant['test_adv']]
+        if variant['is_testing_only'] and variant['env_name'] in ['halfcheetah', 'hopper', 'walker2d']:
+            if "env" not in variant['test_adv']:
+                advs = [variant['test_adv[:-1] + str(adv) for adv in range(8)']]
             else:
                 advs = [f"env{mass}" for mass in [0.5, 0.7, 1.0, 1.5, 2.0]]
 
         for test_adv in advs:   
-            args.test_adv = test_adv
-            if args.env_name in ['halfcheetah', 'hopper', 'walker2d']:
-                env.reset_model_rl(test_adv, args.device)
-            if not args.is_relabeling_only:
+            variant['test_adv'] = test_adv
+            if variant['env_name'] in ['halfcheetah', 'hopper', 'walker2d']:
+                env.reset_model_rl(test_adv, variant['device'])
+            if not variant['is_relabeling_only']:
                 experiment(task,
                             env,
                             max_ep_len,
