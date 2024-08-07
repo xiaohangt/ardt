@@ -1,6 +1,6 @@
 from return_transforms.models.esper.cluster_model import ClusterModel
 from return_transforms.models.esper.dynamics_model import DynamicsModel
-from return_transforms.models.ardt.maxmin_model import RtgNetwork, AdvPolicyNetwork, NewRtgNetwork
+from return_transforms.models.ardt.maxmin_model import RtgFFN, RtgLSTM
 from return_transforms.datasets.esper_dataset import ESPERDataset
 from return_transforms.datasets.ardt_dataset import ARDTDataset
 from return_transforms.datasets.discretizer import TrajectoryDiscretizer
@@ -75,11 +75,11 @@ def worst_case_qf(
     # Set up the models
     print(f'Creating models... It\'s old models: {is_old_model}')
     if is_old_model:
-        qsa2_model = RtgNetwork(obs_size, action_size, adv_action_size, include_adv=True).to(device)
-        qsa_model = RtgNetwork(obs_size, action_size, include_adv=False).to(device)
+        qsa2_model = RtgFFN(obs_size, action_size, adv_action_size, include_adv=True).to(device)
+        qsa_model = RtgFFN(obs_size, action_size, include_adv=False).to(device)
     else:
-        qsa2_model = NewRtgNetwork(obs_size, action_size, adv_action_size, train_args, include_adv=True).to(device)
-        qsa_model = NewRtgNetwork(obs_size, action_size, adv_action_size, train_args, include_adv=False).to(device)
+        qsa2_model = RtgLSTM(obs_size, action_size, adv_action_size, train_args, include_adv=True).to(device)
+        qsa_model = RtgLSTM(obs_size, action_size, adv_action_size, train_args, include_adv=False).to(device)
 
 
     qsa2_optimizer = optim.AdamW(qsa2_model.parameters(), lr=lr, weight_decay=wd)
