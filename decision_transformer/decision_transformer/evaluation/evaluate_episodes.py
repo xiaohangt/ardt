@@ -11,8 +11,7 @@ def worst_case_env_step(state, action, t, env):
     class_name = env.__class__.__name__
     new_state_ind = -1
     adv_action = np.random.choice(2, 1)
-    _, reward, terminated, truncated, _ = env.step(action)
-    done = terminated or truncated
+    _, reward, done, _ = env.step(action)
     
     if class_name == "GamblingEnv":
         if t == 0:
@@ -179,7 +178,7 @@ def evaluate_episode_rtg(
     state_mean = torch.from_numpy(state_mean).to(device=device)
     state_std = torch.from_numpy(state_std).to(device=device)
 
-    state, _ = env.reset()
+    state = env.reset()
     if mode == 'noise':
         state = state + np.random.normal(0, 0.1, size=state.shape)
 
@@ -245,8 +244,7 @@ def evaluate_episode_rtg(
         if worst_case and (env.__class__.__name__ in ["GamblingEnv", "ToyEnv", "MSToyEnv", "NewMSToyEnv"]):
             state, reward, done, infos = worst_case_env_step(state, action, t, env)
         else:
-            state, reward, truncated, terminated, infos = env.step(action)
-            done = truncated or terminated 
+            state, reward, done, infos = env.step(action)
 
         if action_type == 'discrete':
             one_hot_adv_action = torch.zeros(1, adv_act_dim).float()
