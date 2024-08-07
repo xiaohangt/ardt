@@ -57,7 +57,7 @@ def generate(env, trajs, config, ret_file, device, n_cpu=2, ):
         raise NotImplementedError
 
 
-def generate_maxmin(env, env_name, trajs, config, ret_file, device, n_cpu, lr, wd, is_old_model=False, batch_size=64, leaf_weight=0.5, alpha=0.01):
+def generate_maxmin(env, env_name, trajs, config, ret_file, device, n_cpu, lr, wd, is_simple_model=False, batch_size=64, leaf_weight=0.5, alpha=0.01):
     print('Loading config...')
     config = load_config(config)
 
@@ -77,7 +77,7 @@ def generate_maxmin(env, env_name, trajs, config, ret_file, device, n_cpu, lr, w
             n_cpu,
             lr,
             wd,
-            is_old_model,
+            is_simple_model,
             batch_size,
             leaf_weight=leaf_weight,
             alpha=alpha

@@ -35,7 +35,7 @@ def worst_case_qf(
           n_cpu,
           lr,
           wd,
-          is_old_model,
+          is_simple_model,
           batch_size,
           leaf_weight=0.5,
           alpha=0.01,
@@ -73,8 +73,8 @@ def worst_case_qf(
     obs_size = np.prod(obs_shape)
 
     # Set up the models
-    print(f'Creating models... It\'s old models: {is_old_model}')
-    if is_old_model:
+    print(f'Creating models... (simple={is_simple_model})')
+    if is_simple_model:
         qsa2_model = RtgFFN(obs_size, action_size, adv_action_size, include_adv=True).to(device)
         qsa_model = RtgFFN(obs_size, action_size, include_adv=False).to(device)
     else:
