@@ -1,6 +1,7 @@
 import re
 from collections import namedtuple
 
+import numpy as np
 import torch
 
 from arrl.ddpg import DDPG
@@ -25,7 +26,7 @@ class AdvGymEnv:
 
     def reset(self):
         self.t = 0
-        state, _ = self.env.reset()
+        state = self.env.reset()
         self.current_state = state
         return state
     
@@ -56,10 +57,10 @@ class AdvGymEnv:
         if (adv_action is None) and (self.adv_model_path != 'zero') and (self.adv_model is not None):
             state = torch.from_numpy(self.current_state).to(self.adv_model.device, dtype=torch.float32)
             adv_action = self.adv_model.adversary(state).data.clamp(-1, 1).cpu().numpy()
-            state, reward, done, _, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
+            state, reward, done, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
         else:
             adv_action = np.zeros_like(pr_action)
-            state, reward, done, _, _ = self.env.step(pr_action)
+            state, reward, done, _ = self.env.step(pr_action)
         self.current_state = state
         self.t += 1
         return state, reward, done, {'adv_action': adv_action}

@@ -1,3 +1,4 @@
+import copy
 import pickle
 
 import gymnasium as gym
@@ -42,7 +43,7 @@ def collect_random_data(env_name, device, adv_model_path, data_path, horizon=100
     policy_infos_ = []
     t = 0
 
-    obs, _ = env.reset()
+    obs = env.reset()
     reward = None
 
     with torch.no_grad():
@@ -66,7 +67,7 @@ def collect_random_data(env_name, device, adv_model_path, data_path, horizon=100
             policy_infos_.append({})
             actions_.append(pr_action.numpy())
 
-            obs, reward, done, info, _ = env.step(step_action)
+            obs, reward, done, _ = env.step(step_action)
 
             t += 1
             infos_.append({"adv": adv_action.numpy()})
@@ -88,7 +89,7 @@ def collect_random_data(env_name, device, adv_model_path, data_path, horizon=100
                 rewards_ = []
                 infos_ = []
                 policy_infos_ = []
-                obs, _ = env.reset()
+                obs = env.reset()
                 reward = None    
 
     with open(data_path, 'wb') as file:
