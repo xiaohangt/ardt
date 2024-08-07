@@ -109,7 +109,7 @@ if __name__ == '__main__':
     # for return transformation: 
     parser.add_argument('--algo', type=str, required=True, choices=['ardt', 'dt', 'esper', 'bc'])
     parser.add_argument('--config', type=str, required=True)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--leaf_weight', type=float, default=0.9)
     parser.add_argument('--alpha', type=float, default=0.01)
     parser.add_argument('--lr', type=float, default=1e-3) 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
         if not args.is_training:
             config, ret_file, device, n_cpu, lr, wd = args.config, args.ret_file, args.device, args.n_cpu, args.lr, args.wd
             if args.algo == 'ardt':
-                generate_maxmin(env, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_old_model, args.leaf_weight, args.alpha)
+                generate_maxmin(env, args.env_name, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_old_model, args.batch_size, args.leaf_weight, args.alpha)
             elif args.algo == 'dt' or args.algo == 'bc':
                 pass
             elif args.algo == 'esper':

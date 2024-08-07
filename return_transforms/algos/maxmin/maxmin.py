@@ -26,6 +26,7 @@ def discount_cumsum(x, gamma):
 
 
 def worst_case_qf(
+          env_name,
           trajs,
           action_space,
           adv_action_space,
@@ -35,6 +36,7 @@ def worst_case_qf(
           lr,
           wd,
           is_old_model,
+          batch_size,
           leaf_weight=0.5,
           alpha=0.01,
           discretization=False):
@@ -84,25 +86,18 @@ def worst_case_qf(
     qsa_optimizer = optim.AdamW(qsa_model.parameters(), lr=lr, weight_decay=wd)
 
     dataloader = torch.utils.data.DataLoader(dataset,
-                                             batch_size=train_args['batch_size'],
+                                             batch_size=batch_size,
                                              num_workers=n_cpu)
 
     # Calculate epoch markers
-    total_epochs = train_args['return_epochs'] + train_args['cluster_epochs'] 
-    ret_stage = train_args['return_epochs']
-    assert ret_stage % 2 == 0
+    total_epochs = train_args['mse_epochs'] + train_args['maxmin_epochs'] 
+    ret_stage = train_args['maxmin_epochs']
+    assert train_args['maxmin_epochs'] % 2 == 0
 
     print('Training...')
     qsa2_model.train()
     qsa_model.train()
 
-    def check():
-        ret_a2_pred = qsa2_model(obs, acts, adv_acts)
-        ret_a_pred = qsa_model(obs, acts)
-        inds = torch.where((acts.view(acts.shape[0], -1).sum(-1) == 2) * (ret[:, -1] == 0))[0]
-        ind=inds[0]
-        print(np.array(obs[ind].tolist()),  np.array(acts[ind].tolist()),  np.array(ret[ind].tolist()),  np.array(ret_a_pred[ind].tolist()),  np.array(ret_a2_pred[ind].tolist()))
-    
     def expectile_fn(td_error, act_mask, discount_weighted=False):
         batch_loss = torch.abs(alpha - F.normalize(F.relu(td_error), dim=-1)) * (td_error ** 2)
         assert not discount_weighted
@@ -123,7 +118,7 @@ def worst_case_qf(
             total_batches += 1
             bsz, t = obs.shape[:2]
             # Recover adv
-            if train_args["env_name"] == "toy":
+            if env_name == "toy":
                 t -= 1
                 # adv_acts_ind = (torch.where(obs[:, -1] > 0)[1] - 1) % 3
                 # adv_acts = torch.nn.functional.one_hot(adv_acts_ind).unsqueeze(1).float().to(device) # (bsz, seq_len-1, ...)
@@ -153,10 +148,7 @@ def worst_case_qf(
             act_mask[:, 0] = False 
             
             # Calculate the total loss
-            if epoch < ret_stage:
-                # weights = torch.zeros_like(ret).to(device)
-                # weights[:, -1] = 1
-                
+            if epoch < ret_stage:              
                 ret_a2_pred = qsa2_model(obs, acts, adv_acts).view(bsz, t)
                 ret_a_pred = qsa_model(obs, acts).view(bsz, t)
                 ret_a2_loss = (((ret_a2_pred - ret) ** 2) * ~act_mask).mean()
@@ -171,33 +163,28 @@ def worst_case_qf(
                 total_loss += ret_loss.item() + act_loss.item()
                 total_ret_loss += ret_a_loss.item()
                 total_act_loss += ret_a2_loss.item()
-            else:
-                cur_layer = -1 - int((epoch - ret_stage) / 2)
+            elif epoch % 2 == 0:
+                ret_a2_pred = qsa2_model(obs, acts, adv_acts)
+                ret_a_pred = qsa_model(obs, acts)
+                ret_a_loss = expectile_fn(ret_a_pred - ret_a2_pred.detach(), act_mask)            
+                ret_loss = ret_a_loss 
+                ret_a_loss.backward()
+                qsa_optimizer.step()       
+            else:                
+                rewards = (ret[:, :-1] - ret[:, 1:]).view(bsz, -1, 1)
+                ret_a_pred = qsa_model(obs, acts)
+                ret_a2_pred = qsa2_model(obs, acts, adv_acts)
 
-                if epoch % 2 == 0:
+                ret_leaf_loss = ((ret_a2_pred[range(bsz), seq_len].flatten() - ret[range(bsz), seq_len]) ** 2).mean()
+                ret_a2_loss = expectile_fn(ret_a_pred[:, 1:].detach() + rewards - ret_a2_pred[:, :-1], act_mask[:, :-1]) * (1 - leaf_weight) + ret_leaf_loss * leaf_weight                    
 
-                    ret_a2_pred = qsa2_model(obs, acts, adv_acts)
-                    ret_a_pred = qsa_model(obs, acts)
-                    ret_a_loss = expectile_fn(ret_a_pred - ret_a2_pred.detach(), act_mask)            
-                    ret_loss = ret_a_loss 
-                    ret_a_loss.backward()
-                    qsa_optimizer.step()
-                    
-                else:                
-                    rewards = (ret[:, :-1] - ret[:, 1:]).view(bsz, -1, 1)
-                    ret_a_pred = qsa_model(obs, acts)
-                    ret_a2_pred = qsa2_model(obs, acts, adv_acts)
+                ret_loss = ret_a2_loss
+                ret_a2_loss.backward()
+                qsa2_optimizer.step()
 
-                    ret_leaf_loss = ((ret_a2_pred[range(bsz), seq_len].flatten() - ret[range(bsz), seq_len]) ** 2).mean()
-                    ret_a2_loss = expectile_fn(ret_a_pred[:, 1:].detach() + rewards - ret_a2_pred[:, :-1], act_mask[:, :-1]) * (1 - leaf_weight) + ret_leaf_loss * leaf_weight                    
-
-                    ret_loss = ret_a2_loss
-                    ret_a2_loss.backward()
-                    qsa2_optimizer.step()
-
-                    total_loss += ret_loss.item() + act_loss.item()
-                    total_act_loss += act_loss.item()
-                    total_ret_loss += ret_loss.item()
+                total_loss += ret_loss.item() + act_loss.item()
+                total_act_loss += act_loss.item()
+                total_ret_loss += ret_loss.item()
                 
             pbar.set_description(
                 f"Epoch {epoch} | Loss: {total_loss / total_batches:.4f} | loss 1: {total_ret_loss / total_batches:.4f} | loss 2: {total_act_loss / total_batches:.4f}")

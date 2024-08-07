@@ -2,9 +2,9 @@ method: ardt
 normalize: false
 train_args:
   gamma: 1.0
-  scale: 1.0
-  mse_epochs: 6
-  maxmin_epochs: 44
+  scale: 5.0
+  mse_epochs: 1
+  maxmin_epochs: 2
   
   ret_obs_action_model:
     hidden_size: 512

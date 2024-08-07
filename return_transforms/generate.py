@@ -57,10 +57,9 @@ def generate(env, trajs, config, ret_file, device, n_cpu=2, ):
         raise NotImplementedError
 
 
-def generate_maxmin(env, trajs, config, ret_file, device, n_cpu, lr, wd, is_old_model=False, leaf_weight=0.5, alpha=0.01):
+def generate_maxmin(env, env_name, trajs, config, ret_file, device, n_cpu, lr, wd, is_old_model=False, batch_size=64, leaf_weight=0.5, alpha=0.01):
     print('Loading config...')
     config = load_config(config)
-    config["cluster_epochs"] = 0
 
     if config['method'] == 'ardt':
         if config['normalize']:
@@ -69,6 +68,7 @@ def generate_maxmin(env, trajs, config, ret_file, device, n_cpu, lr, wd, is_old_
 
         print('Creating ARDT returns...')
         rets, prompt_value, qsa2_model = worst_case_qf(
+            env_name,
             trajs,
             env.action_space,
             env.adv_action_space,
@@ -78,7 +78,8 @@ def generate_maxmin(env, trajs, config, ret_file, device, n_cpu, lr, wd, is_old_
             lr,
             wd,
             is_old_model,
-            leaf_weight,
+            batch_size,
+            leaf_weight=leaf_weight,
             alpha=alpha
         )
 

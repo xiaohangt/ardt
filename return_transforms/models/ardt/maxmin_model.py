@@ -109,10 +109,10 @@ class NewRtgNetwork(torch.nn.Module):
         self.include_adv = include_adv
         self.is_lstm = is_lstm
 
-        hidden_dim = model_args['obs_action_model']['hidden_size']
+        hidden_dim = model_args['ret_obs_action_model']['hidden_size']
         self.hidden_dim = hidden_dim
-        input_dim = state_dim + action_dim + adv_action_dim if include_adv else state_dim + action_dim
 
+        input_dim = state_dim + action_dim + adv_action_dim if include_adv else state_dim + action_dim
         self.ret_obs_action_model = MLP(input_dim, hidden_dim, **model_args['ret_obs_action_model'])
         
         if is_lstm:
