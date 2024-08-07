@@ -26,7 +26,7 @@ def normalize_obs(trajs):
     return trajs
 
 
-def generate(env, trajs, config, ret_file, device, n_cpu=2, ):
+def generate(env, trajs, config, ret_file, device, n_cpu, ):
     print('Loading config...')
     config = load_config(config)
 
