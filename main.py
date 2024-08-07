@@ -115,7 +115,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3) 
     parser.add_argument('--wd', type=float, default=1e-4) 
     parser.add_argument('--n_cpu', type=int, default=1)
-    parser.add_argument('--is_old_model', action='store_true')
+    parser.add_argument('--is_simple_model', action='store_true')
 
     # for decision transformer:
     parser.add_argument('--checkpoint_dir', type=str, default=None)
@@ -178,7 +178,7 @@ if __name__ == '__main__':
         if not args.is_training:
             config, ret_file, device, n_cpu, lr, wd = args.config, args.ret_file, args.device, args.n_cpu, args.lr, args.wd
             if args.algo == 'ardt':
-                generate_maxmin(env, args.env_name, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_old_model, args.batch_size, args.leaf_weight, args.alpha)
+                generate_maxmin(env, args.env_name, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_simple_model, args.batch_size, args.leaf_weight, args.alpha)
             elif args.algo == 'dt' or args.algo == 'bc':
                 pass
             elif args.algo == 'esper':
