@@ -16,7 +16,7 @@ def esper(trajs,
           cluster_model_args,
           train_args,
           device,
-          n_cpu=2):
+          n_cpu):
 
     # Check if discrete action space
     if isinstance(action_space, gym.spaces.Discrete):

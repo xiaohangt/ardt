@@ -105,6 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--env_name', type=str, required=True, choices=['toy', 'mstoy', 'connect_four', 'halfcheetah', 'hopper', 'walker2d'])
     parser.add_argument('--ret_file', type=str, required=True)
     parser.add_argument('--device', type=str, required=True)
+    parser.add_argument('--n_cpu', type=int, default=1)
 
     # for return transformation: 
     parser.add_argument('--algo', type=str, required=True, choices=['ardt', 'dt', 'esper', 'bc'])
@@ -114,7 +115,6 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=0.01)
     parser.add_argument('--lr', type=float, default=1e-3) 
     parser.add_argument('--wd', type=float, default=1e-4) 
-    parser.add_argument('--n_cpu', type=int, default=1)
     parser.add_argument('--is_simple_model', action='store_true')
 
     # for decision transformer:
@@ -182,7 +182,7 @@ if __name__ == '__main__':
             elif args.algo == 'dt' or args.algo == 'bc':
                 pass
             elif args.algo == 'esper':
-                generate(env, trajs, config, ret_file, device, n_cpu=2)
+                generate(env, trajs, config, ret_file, device, n_cpu=args.n_cpu)
             else:
                 raise Exception('Algo error')
 

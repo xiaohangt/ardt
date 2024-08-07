@@ -48,7 +48,6 @@ def experiment(
         # since BC ignores target, no need for different evaluations
         env_targets = env_targets[:1]
     
-
     rtg_path = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
     state_dim = np.prod(env.observation_space.shape)
     if action_type == 'discrete':

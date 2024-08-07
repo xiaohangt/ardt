@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', type=str, default='"configs/esper/connect_four.yaml"')
     parser.add_argument('--ret_file', type=str, default='test')
     parser.add_argument('--device', type=str, default='cpu')
-    parser.add_argument('--n_cpu', type=int, default=10)
+    parser.add_argument('--n_cpu', type=int, default=4)
 
     args = parser.parse_args()
 
