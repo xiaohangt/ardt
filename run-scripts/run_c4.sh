@@ -27,7 +27,7 @@ do
             --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${alpha}_seed${seed}" \
             --model_type "dt" \
             --K 22 \
-            --max_iters 1 \
+            --train_iters 1 \
             --num_steps_per_iter 100000 \
             --test_adv 0.5 \
             --num_eval_episodes 100

@@ -88,10 +88,6 @@ def experiment(
             traj_dict['adv_actions'] = adv_a
         trajectories.append(traj_dict)
 
-    n_data = len(trajectories)
-    used_data = int(n_data * variant['prop_data'])
-    trajectories = trajectories[:used_data]
-
     # save all path information into separate lists
     states, traj_lens, returns = [], [], []
     for path in trajectories:
@@ -126,10 +122,10 @@ def experiment(
     K = variant['K']
     batch_size = variant['batch_size']
     num_eval_episodes = 1 if variant['argmax'] else variant['num_eval_episodes']
-    pct_traj = variant.get('pct_traj', 1.)
+    top_pct_traj = variant.get('top_pct_traj', 1.)
 
-    # only train on top pct_traj trajectories (for %BC experiment)
-    num_timesteps = max(int(pct_traj * num_timesteps), 1)
+    # only train on top top_pct_traj trajectories (for %BC experiment)
+    num_timesteps = max(int(top_pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
     num_trajectories = 1
     timesteps = traj_lens[sorted_inds[-1]]
@@ -406,9 +402,9 @@ def experiment(
                 breakpoint()
 
     completed_iters = pm.load_if_exists('completed_iters', 0)
-    print("Trained for iteraions:", completed_iters)
-    for iter in range(completed_iters, variant['max_iters']):
-        outputs = trainer.train_iteration(num_steps=variant['num_steps_per_iter'], iter_num=iter + 1, print_logs=True)
+    print("Trained for iterations:", completed_iters)
+    for iter in range(completed_iters, variant['train_iters']):
+        outputs = trainer.train_iteration(num_steps=variant['num_steps_per_iter'], iter_num=iter+1, print_logs=True)
         pm.save_torch('optimizer', optimizer)
         pm.save_torch('scheduler', scheduler)
         pm.save_torch('model', model)
@@ -418,8 +414,7 @@ def experiment(
         completed_iters += 1
         pm.save('completed_iters', completed_iters)
         
-    if variant['is_testing'] and (variant['max_iters'] == 0 or variant['num_steps_per_iter'] == 0):
-        print("Testing Only")
+    if not variant['is_training_only']:
         for tar in env_targets:
             eval_func = eval_episodes(tar)
             print(tar, eval_func(model))

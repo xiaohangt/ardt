@@ -22,6 +22,7 @@ do
 
     # Training
     python main.py \
+        --is_training_only \
         --seed $seed \
         --data_name $d_name \
         --added_data_name $added_data_name \
@@ -37,7 +38,7 @@ do
         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed${seed}" \
         --K 20 \
         --model_type $model_type \
-        --max_iters 12 \
+        --train_iters 12 \
         --num_steps_per_iter 100000 \
         --test_adv $adv \
         --env_alpha $env_alpha \
@@ -45,7 +46,7 @@ do
 
     # Testing
     python main.py \
-        --is_training \
+        --is_testing_only \
         --seed $seed \
         --data_name $d_name \
         --added_data_name $added_data_name \
@@ -61,7 +62,7 @@ do
         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed$(( $seed % 5 ))" \
         --K 20 \
         --model_type $model_type \
-        --max_iters 0 \
+        --train_iters 0 \
         --num_steps_per_iter 0 \
         --test_adv $adv \
         --env_alpha $env_alpha \
