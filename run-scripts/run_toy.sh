@@ -14,5 +14,5 @@ python main.py \
     --checkpoint_dir "checkpoints/${algo}_toy_seed${seed}" \
     --model_type "dt" \
     --K 4 \
-    --max_iters 1 \
+    --train_iters 1 \
     --num_steps_per_iter 10000
