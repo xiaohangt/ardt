@@ -31,6 +31,7 @@ do
         --device $device \
         --algo $algo \
         --config "configs/${algo}/mujoco.yaml" \
+        --batch_size 512 \
         --leaf_weight $ll \
         --alpha $alpha \
         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed${seed}" \
@@ -54,6 +55,7 @@ do
         --device $device \
         --algo $algo \
         --config "configs/${algo}/mujoco.yaml" \
+        --batch_size 512 \
         --leaf_weight $ll \
         --alpha $alpha \
         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed$(( $seed % 5 ))" \

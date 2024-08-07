@@ -36,10 +36,10 @@ class ClusterModel(torch.nn.Module):
         self.logit_model = MLP(
             self.hidden_size, rep_size, **model_args['logit_model']
         )
-        self.ret_obs_action_model = MLP(
-            obs_size + action_size, self.hidden_size, **model_args['ret_obs_action_model']
+        self.ret_obs_act_model_args = MLP(
+            obs_size + action_size, self.hidden_size, **model_args['ret_obs_act_model_args']
         )
-        self.return_model = MLP(rep_size + self.hidden_size, 1, **model_args['return_model'])
+        self.ret_model_args = MLP(rep_size + self.hidden_size, 1, **model_args['ret_model_args'])
         self.action_model = MLP(rep_size + obs_size, action_size, **model_args['action_model'])
 
     def forward(self, obs, action, seq_len, hidden=None, hard=False):
@@ -78,12 +78,12 @@ class ClusterModel(torch.nn.Module):
 
         # ================ Compute return prediction ================
         x = torch.cat([obs, action], dim=-1).view(bsz * t, -1)
-        ret_obs_act_reps = self.ret_obs_action_model(x).view(bsz, t, -1)
+        ret_obs_act_reps = self.ret_obs_act_model_args(x).view(bsz, t, -1)
 
         ret_input = torch.cat(
             [clusters.detach(), ret_obs_act_reps], dim=-1).view(bsz * t, -1)
 
-        ret_pred = self.return_model(ret_input).view(bsz, t, -1)
+        ret_pred = self.ret_model_args(ret_input).view(bsz, t, -1)
 
         # ================ Compute action prediction ================
 
@@ -137,11 +137,11 @@ class ClusterModel(torch.nn.Module):
 
         # ================ Compute return prediction ================
         x = torch.cat([obs, action], dim=-1).view(bsz * t, -1)
-        ret_obs_act_reps = self.ret_obs_action_model(x).view(bsz, t, -1)
+        ret_obs_act_reps = self.ret_obs_act_model_args(x).view(bsz, t, -1)
 
         ret_input = torch.cat(
             [clusters.detach(), ret_obs_act_reps], dim=-1).view(bsz * t, -1)
 
-        ret_pred = self.return_model(ret_input).view(bsz, t, -1)
+        ret_pred = self.ret_model_args(ret_input).view(bsz, t, -1)
 
         return ret_pred, clusters

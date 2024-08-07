@@ -109,10 +109,10 @@ class NewRtgNetwork(torch.nn.Module):
         self.include_adv = include_adv
         self.is_lstm = is_lstm
 
-        hidden_dim = model_args['obs_action_model']['hidden_size']
+        hidden_dim = model_args['ret_obs_action_model']['hidden_size']
         self.hidden_dim = hidden_dim
-        input_dim = state_dim + action_dim + adv_action_dim if include_adv else state_dim + action_dim
 
+        input_dim = state_dim + action_dim + adv_action_dim if include_adv else state_dim + action_dim
         self.ret_obs_action_model = MLP(input_dim, hidden_dim, **model_args['ret_obs_action_model'])
         
         if is_lstm:
@@ -198,3 +198,40 @@ class RtgNetwork(torch.nn.Module):
             act_emd, obs_emd, adv_emd = self.act_embed(pr_action), self.obs_embed(observation), self.adv_act_embed(adv_action)
             return self.rtg_net(torch.cat([obs_emd, act_emd, adv_emd], dim=-1))
  
+ 
+class RtgLSTM(torch.nn.Module):
+    def __init__(self, state_dim, action_dim, adv_action_dim, model_args, hidden_dim=64, include_adv=False, is_lstm=True) -> None:
+        super().__init__()
+        self.include_adv = include_adv
+        self.is_lstm = is_lstm
+
+        hidden_dim = model_args['ret_obs_act_model_args']['hidden_size']
+        self.hidden_dim = hidden_dim
+
+        input_dim = state_dim + action_dim + adv_action_dim if include_adv else state_dim + action_dim
+        self.ret_obs_act_model_args = MLP(input_dim, hidden_dim, **model_args['ret_obs_act_model_args'])
+        
+        if is_lstm:
+            self.lstm_model = torch.nn.LSTM(hidden_dim, hidden_dim,batch_first=True)
+            self.ret_model_args = torch.nn.Linear(hidden_dim, 1)
+        else:
+            self.ret_model_args = MLP(hidden_dim, 1, **model_args['ret_model_args'])
+
+    def forward(self, obs, action, adv_action=None):
+        bsz, t = obs.shape[:2]
+        if self.include_adv:
+            x = torch.cat([obs, action, adv_action], dim=-1).view(bsz * t, -1)
+        else:
+            x = torch.cat([obs, action], dim=-1).view(bsz * t, -1)
+        ret_obs_act_reps = self.ret_obs_act_model_args(x).view(bsz, t, -1)
+
+        if self.is_lstm:
+            # Use LSTM to get the representations for each suffix of the sequence
+            hidden = (torch.zeros(1, bsz, self.hidden_dim).to(x.device), torch.zeros(1, bsz, self.hidden_dim).to(x.device))
+            x, _ = self.lstm_model(ret_obs_act_reps, hidden)
+
+            # Reverse the sequence in time again
+            ret_pred = self.ret_model_args(x.view(bsz, t, -1))
+        else:
+            ret_pred = self.ret_model_args(ret_obs_act_reps).view(bsz, t, -1)
+        return ret_pred
