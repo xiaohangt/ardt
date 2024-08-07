@@ -4,6 +4,10 @@
 *.csv
 stochastic_offline_envs/
 arrl/
+offline_data/
+data/
+results/
+checkpoints/
 .DS_Store
 
 # Byte-compiled / optimized / DLL files

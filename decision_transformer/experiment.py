@@ -77,6 +77,8 @@ def experiment(
             adv_a = np.array([info["adv"] if info else -1 for info in traj.infos])
         elif "adv_action" in traj.infos[0]:
             adv_a = np.array([info["adv_action"] if info else 0 for info in traj.infos])
+        else:
+            adv_a = np.zeros(len(traj_dict["actions"]), adv_act_dim)
 
         if action_type == "discrete":
             traj_dict['adv_actions'] = np.zeros((adv_a.size, adv_act_dim))

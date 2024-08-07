@@ -41,23 +41,20 @@ def load_env(env_name,
     if 'connect_four' in env_name:
         max_ep_len, scale = 22, 10
         task = ConnectFourOfflineEnv(data_name=data_name, 
-                                     data_dir=data_dir, 
-                                     test_regen_prob=eval(test_adv))
+                                    test_regen_prob=eval(test_adv))
         env = task.env_cls()
         env = GridWrapper(env)
         if traj_len:
             task.trajs = task.trajs[:traj_len]
-        
+        trajs = task.trajs 
         if added_data_name:
             task_added = ConnectFourOfflineEnv(data_name=added_data_name, 
-                                           data_dir=data_dir, 
-                                           test_regen_prob=eval(test_adv))
-        trajs = task.trajs + task_added.trajs
+                                              test_regen_prob=eval(test_adv))
+            trajs += task_added.trajs
         for traj in trajs:
             for i in range(len(traj.obs)):
                 traj.obs[i] = traj.obs[i]['grid']
         data_name = data_name + added_data_name
-
     elif env_name == 'gambling':
         task = GamblingOfflineEnv()
         max_ep_len, env_targets, scale = 5, list(np.arange(-15, 5, 0.5)) + [5.], 5.
@@ -101,60 +98,66 @@ def load_env(env_name,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_name', type=str, required=True, default='')
-    parser.add_argument('--added_data_name', type=str, default="")
-    parser.add_argument('--added_data_prop', type=float, default=0.1)
-    parser.add_argument('--env_name', type=str, default='halfcheetah')
-    parser.add_argument('--config', type=str, default='configs/esper/connect_four.yaml')
-    parser.add_argument('--ret_file', type=str, default=None)
-    parser.add_argument('--device', type=str, default='cuda:0')
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--data_name', type=str, required=True)
+    parser.add_argument('--added_data_name', type=str, default='')
+    parser.add_argument('--added_data_prop', type=float, default=0.0)
+    parser.add_argument('--env_name', type=str, required=True, choices=['toy', 'mstoy', 'connect_four', 'halfcheetah', 'hopper', 'walker2d'])
+    parser.add_argument('--ret_file', type=str, required=True)
+    parser.add_argument('--device', type=str, required=True)
 
     # for return transformation: 
-    parser.add_argument('--n_cpu', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=1e-3) 
-    parser.add_argument('--wd', type=float, default=1e-4) 
-    parser.add_argument('--is_old_model', action='store_true')
-    parser.add_argument('--algo', type=str, default='ardt', choices=['ardt', 'dt', 'esper', 'bc'])
-    parser.add_argument('--K', type=int, default=20)
+    parser.add_argument('--algo', type=str, required=True, choices=['ardt', 'dt', 'esper', 'bc'])
+    parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--leaf_weight', type=float, default=0.9)
+    parser.add_argument('--alpha', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=1e-3) 
+    parser.add_argument('--wd', type=float, default=1e-4) 
+    parser.add_argument('--n_cpu', type=int, default=1)
+    parser.add_argument('--is_old_model', action='store_true')
 
-    # for Transformer training
+    # for decision transformer:
+    parser.add_argument('--checkpoint_dir', type=str, default=None)
+    parser.add_argument('--is_training', action='store_true')
+    parser.add_argument('--is_testing', action='store_true')
+    parser.add_argument('--is_relabeling', action='store_true')
+    parser.add_argument('--collect_data', action='store_true')
+    parser.add_argument('--prop_data', type=float, default=1.)
     parser.add_argument('--pct_traj', type=float, default=1.)
+    parser.add_argument('--traj_len', type=int, default=None)
+
     parser.add_argument('--model_type', type=str, default='dt', choices=['adt', 'dt', 'bc'])
     parser.add_argument('--embed_dim', type=int, default=128)
     parser.add_argument('--n_layer', type=int, default=3)
     parser.add_argument('--n_head', type=int, default=1)
+    parser.add_argument('--K', type=int, default=20)
     parser.add_argument('--activation_function', type=str, default='relu')
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--weight_decay', '-wd', type=float, default=1e-4)
     parser.add_argument('--warmup_steps', type=int, default=1000)
-    parser.add_argument('--num_eval_episodes', type=int, default=100)
     parser.add_argument('--max_iters', type=int, default=10)
     parser.add_argument('--num_steps_per_iter', type=int, default=10000)
-    parser.add_argument('--checkpoint_dir', type=str, default=None)
-    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--argmax', type=bool, default=False)
     parser.add_argument('--rtg_seq', type=bool, default=True)
     parser.add_argument('--normalize_states', action='store_true')
-    parser.add_argument('--is_training', action='store_true')
-    parser.add_argument('--is_relabeling', action='store_true')
-    parser.add_argument('--test_adv', type=str, default='0.8')
+    
+    # for decision transformer evaluation:
     parser.add_argument('--env_data_dir', type=str, default="")
-    parser.add_argument('--prop_data', type=float, default=1.)
-    parser.add_argument('--alpha', type=float, default=0.01)
+    parser.add_argument('--test_adv', type=str, default='0.8')
     parser.add_argument('--env_alpha', type=float, default=0.1)
-    parser.add_argument('--mix_coef', type=float, default=0.01)
-    parser.add_argument('--traj_len', type=int, default=None)
-    parser.add_argument('--collect_data', action='store_true')
+    parser.add_argument('--num_eval_episodes', type=int, default=100)
+    
 
     args = parser.parse_args()
     variant = vars(args)
-    if args.algo == 'bc':
-        assert args.model_type == 'bc'
+    if variant['algo'] == 'bc':
+        assert variant['model_type'] == 'bc'
+    if variant['device'] == 'gpu':
+        variant['device'] = 'cuda'
     
-    print(variant)
+    print("Arguments:", variant)
 
     print("############### Loading ##################")
     task, max_ep_len, env_targets, scale, action_type, env, trajs = \
@@ -174,7 +177,6 @@ if __name__ == '__main__':
         
         if not args.is_training:
             config, ret_file, device, n_cpu, lr, wd = args.config, args.ret_file, args.device, args.n_cpu, args.lr, args.wd
-
             if args.algo == 'ardt':
                 generate_maxmin(env, trajs, config, ret_file, device, n_cpu, lr, wd, args.is_old_model, args.leaf_weight, args.alpha)
             elif args.algo == 'dt' or args.algo == 'bc':

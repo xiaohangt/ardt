@@ -44,12 +44,14 @@ class ARDTDataset(IterableDataset):
                     adv_actions[np.arange(adv_a.size), adv_a] = 1
                     if traj.infos[-1] == {}:
                         adv_actions[-1] = 0
-                if "adv_action" in traj.infos[0]:
+                elif "adv_action" in traj.infos[0]:
                     adv_a = np.array([info["adv_action"] if info else np.random.randint(self.n_adv_actions) for info in traj.infos])
                     adv_actions = np.zeros((adv_a.size, self.n_adv_actions))
                     adv_actions[np.arange(adv_a.size), adv_a] = 1
                     if traj.infos[-1] == {}:
                         adv_actions[-1] = 0
+                else:
+                    adv_actions = np.zeros((a.size, self.n_adv_actions))
                 actions = np.zeros((a.size, self.n_actions))
                 actions[np.arange(a.size), a] = 1
             else:

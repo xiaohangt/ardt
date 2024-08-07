@@ -198,5 +198,3 @@ class RtgNetwork(torch.nn.Module):
             act_emd, obs_emd, adv_emd = self.act_embed(pr_action), self.obs_embed(observation), self.adv_act_embed(adv_action)
             return self.rtg_net(torch.cat([obs_emd, act_emd, adv_emd], dim=-1))
  
-    def eval(self, **kwargs):
-        return MLPEvalWrapper(self)

@@ -25,7 +25,8 @@ def discount_cumsum(x, gamma):
     return discount_cumsum
 
 
-def worst_case_qf(trajs,
+def worst_case_qf(
+          trajs,
           action_space,
           adv_action_space,
           train_args,
