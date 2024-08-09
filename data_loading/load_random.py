@@ -5,17 +5,43 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-from utils import AdvGymEnv
-from utils import Trajectory
-
 from arrl.ddpg import DDPG
 from arrl.main import load_env_name
 from arrl.utils import load_model 
+from data_loading.dataclasses import AdvGymEnv
+from data_loading.dataclasses import Trajectory
 
 
-def collect_random_data(env_name, device, adv_model_path, data_path, horizon=1000):
-    actual_adv_path = adv_model_path.replace(env_name, load_env_name(env_name))
+def collect_random_data(
+        env_name: str, 
+        data_path: str, 
+        adv_model_path: str, 
+        traj_length: int = 1000,
+        n_transitions: int = 1e6,
+        rnd_prob: float = 0.1,
+        env_alpha: float = 0.1,
+        device_str: str = "cpu", 
+    ) -> tuple[AdvGymEnv, list[Trajectory]]:
+    """
+    Collect random data from the given environment and adversarial model.
+
+    Args:
+        env_name (str): The name of the environment.
+        data_path (str): The path to save the data.
+        adv_model_path (str): The path to the adversarial model.
+        traj_length (int): The length of the trajectory.
+        device (str): The device to use.
+
+    Returns:
+        env (AdvGymEnv): The environment.
+        trajs (List[Trajectory]): The list of trajectories.
+    """
+    # Load the environment
     env = gym.make(load_env_name(env_name))
+
+    # Load the adversarial model
+    device = torch.device(device_str)
+    actual_adv_path = adv_model_path.replace(env_name, load_env_name(env_name))
     agent = DDPG(
         gamma=1, 
         tau=1, 
@@ -27,62 +53,55 @@ def collect_random_data(env_name, device, adv_model_path, data_path, horizon=100
         replay_size=1, 
         device=device
     )
-        
     load_model(agent, basedir=actual_adv_path)
     agent.eval()
+
+    # Collect the data
     noise = torch.distributions.uniform.Uniform(torch.tensor([-1.0], dtype=torch.float32), torch.tensor([1.0], dtype=torch.float32))
-
-    n_interactions = 1e6
     trajs = []
-    n_gathered = 0
-
     obs_ = []
     actions_ = []
     rewards_ = []
     infos_ = []
     policy_infos_ = []
-    t = 0
-
     obs = env.reset()
     reward = None
+    n_gathered = 0
+    t = 0
 
     with torch.no_grad():
-        while n_gathered < n_interactions:
-            if n_gathered % 1e4 == 0:
-                print(f"\r{n_gathered} steps done", end='')
-            obs_.append(copy.deepcopy(obs))
-
-            state = torch.from_numpy(obs).to(device, dtype=torch.float32)
-
-            pr_action = agent.actor(state).clamp(-1, 1).cpu()
-            if np.random.random() < 0.1:
-                pr_action = noise.sample(pr_action.shape).view(pr_action.shape).cpu()
-
-            adv_action = agent.adversary(state).clamp(-1, 1).cpu()
-            if np.random.random() < 0.1:
-                adv_action = noise.sample(adv_action.shape).view(adv_action.shape).cpu()
-
-            step_action = (pr_action * 0.9 + adv_action * 0.1).data.clamp(-1, 1).numpy()
-
+        while n_gathered < n_transitions:
+            # Process actions
             policy_infos_.append({})
+            obs_.append(copy.deepcopy(obs))
+            obs = torch.from_numpy(obs).to(device, dtype=torch.float32)
+
+            pr_action = agent.actor(obs).clamp(-1, 1).cpu()
+            if np.random.random() < rnd_prob:
+                pr_action = noise.sample(pr_action.shape).view(pr_action.shape).cpu()
             actions_.append(pr_action.numpy())
 
-            obs, reward, done, _ = env.step(step_action)
-
-            t += 1
+            adv_action = agent.adversary(obs).clamp(-1, 1).cpu()
+            if np.random.random() < rnd_prob:
+                adv_action = noise.sample(adv_action.shape).view(adv_action.shape).cpu()
             infos_.append({"adv": adv_action.numpy()})
+
+            # Combine actions and take a step
+            comb_action = (pr_action * (1-env_alpha) + adv_action * env_alpha).data.clamp(-1, 1).numpy()
+            obs, reward, done, _ = env.step(comb_action)
             rewards_.append(reward)
-
+            
+            # Process the trajectory if done, and reset
             n_gathered += 1
-
-            if t == horizon or done:
+            t += 1
+            if t == traj_length or done:
                 trajs.append(Trajectory(
                     obs=obs_,
                     actions=actions_,
                     rewards=rewards_,
                     infos=infos_,
-                    policy_infos=policy_infos_)
-                )
+                    policy_infos=policy_infos_
+                ))
                 t = 0
                 obs_ = []
                 actions_ = []

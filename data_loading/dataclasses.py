@@ -1,6 +1,7 @@
 import re
 from collections import namedtuple
 
+import gymnasium as gym
 import numpy as np
 import torch
 
@@ -13,24 +14,47 @@ Trajectory = namedtuple("Trajectory", ["obs", "actions", "rewards", "infos", "po
 
 
 class AdvGymEnv:
-    def __init__(self, env, adv_model_path, device, env_name, env_alpha=0.1, basic_bm=None):
+    """
+    A container class for a gym environment that includes an adversary model.
+
+    Args:
+        env (gym.Env): The environment.
+        adv_model_path (str): The path to the adversarial model.
+        basic_bm (float): The basic body mass.
+        env_alpha (float): The environment alpha.
+        device_str (str): The device to use.
+    """
+    def __init__(
+            self, 
+            env: gym.Env,
+            env_name: str,
+            adv_model_path: str,  
+            basic_bm: float = None,
+            env_alpha: float = 0.1, 
+            device_str: str = "cpu",
+        ):
         self.env = env
         self.env_name = env_name
-        self.adv_action_space = env.action_space
         self.adv_model_path = adv_model_path
         self.basic_bm = basic_bm
-        self.reset_model_rl(adv_model_path, device)
+        self.env_alpha = env_alpha
+        self.reset_adv_agent(adv_model_path, device_str)
         self.current_state = None
         self.t = 0
-        self.env_alpha = env_alpha
 
-    def reset(self):
+    def reset(self) -> np.ndarray:
         self.t = 0
-        state = self.env.reset()
-        self.current_state = state
-        return state
+        self.current_state = self.env.reset() 
+        return self.current_state
     
-    def reset_model_rl(self, adv_model_path, device):
+    def reset_adv_agent(self, adv_model_path: str, device_str: str) -> None:   
+        """
+        Reset the adversary agent in the environment.
+
+        Args:
+            adv_model_path (str): The path to the adversary model.
+            device_str (str): The device
+        """
         print("Reset adversary:", adv_model_path)
         self.adv_model = None
         if 'env' in adv_model_path:
@@ -48,17 +72,39 @@ class AdvGymEnv:
                 train_mode=False, 
                 alpha=1, 
                 replay_size=1, 
-                device=device
+                device=torch.device(device_str)
             )
             load_model(agent, basedir=adv_model_path)
             self.adv_model = agent
 
-    def step(self, pr_action, adv_action=None):
-        if (adv_action is None) and (self.adv_model_path != 'zero') and (self.adv_model is not None):
+    def step(
+            self, 
+            pr_action: np.ndarray,
+            adv_action: np.ndarray | None = None
+        ) -> tuple[np.ndarray, float, bool, dict]:
+        """
+        Take a step in the environment.
+
+        Args:
+            pr_action (np.ndarray): The protagonist action.
+            adv_action (np.ndarray): The adversary action.
+
+        Returns:
+            state (np.ndarray): The new state.
+            reward (float): The reward.
+            done (bool): The done flag.
+            dict: The dictionary of the adversarial action taken.
+        """
+        if adv_action is None and self.adv_model_path != 'zero' and self.adv_model is not None:
+            # Adversary action generated using the adversary agent
             state = torch.from_numpy(self.current_state).to(self.adv_model.device, dtype=torch.float32)
             adv_action = self.adv_model.adversary(state).data.clamp(-1, 1).cpu().numpy()
             state, reward, done, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
+        elif adv_action is not None:
+            # Adversary action provided
+            state, reward, done, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
         else:
+            # No adversary action
             adv_action = np.zeros_like(pr_action)
             state, reward, done, _ = self.env.step(pr_action)
         self.current_state = state

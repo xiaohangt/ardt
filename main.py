@@ -77,7 +77,6 @@ def load_env(env_name,
         added_dir_prefix = f"offline_data/{added_data_name}" 
 
         env, trajs = load_mujoco_env(env_name, 
-                                     data_name, 
                                      dir_prefix=dir_prefix, 
                                      adv_model_path=test_adv, 
                                      added_dir_prefix=added_dir_prefix,
@@ -200,7 +199,7 @@ if __name__ == '__main__':
         for test_adv in advs:   
             variant['test_adv'] = test_adv
             if variant['env_name'] in ['halfcheetah', 'hopper', 'walker2d']:
-                env.reset_model_rl(test_adv, variant['device'])
+                env.reset_adv_agent(test_adv, variant['device'])
             if not variant['is_relabeling_only']:
                 experiment(task,
                             env,
