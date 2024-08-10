@@ -73,8 +73,8 @@ def load_env(env_name,
     elif env_name in ['halfcheetah', 'hopper', 'walker2d']:
         scale = 1000.
         tr_dicts = {'halfcheetah': [2000, 3000], 'hopper': [500, 1000], 'walker2d': [800, 1000]}
-        dir_prefix = f"offline_data/{data_name}" 
-        added_dir_prefix = f"offline_data/{added_data_name}" 
+        dir_prefix = f"stochastic_offline_envs/offline_data/{data_name}" 
+        added_dir_prefix = f"stochastic_offline_envs/offline_data/{added_data_name}" 
 
         env, trajs = load_mujoco_env(env_name, 
                                      dir_prefix=dir_prefix, 
@@ -192,7 +192,7 @@ if __name__ == '__main__':
         advs = [variant['test_adv']]
         if variant['is_testing_only'] and variant['env_name'] in ['halfcheetah', 'hopper', 'walker2d']:
             if "env" not in variant['test_adv']:
-                advs = [variant['test_adv[:-1] + str(adv) for adv in range(8)']]
+                advs = [args.test_adv[:-1] + str(adv) for adv in range(8)]
             else:
                 advs = [f"env{mass}" for mass in [0.5, 0.7, 1.0, 1.5, 2.0]]
 

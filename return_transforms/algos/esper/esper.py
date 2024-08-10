@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-import gymnasium as gym
+import gym
 
 
 def esper(trajs,
@@ -164,7 +164,7 @@ def test_env(label_model, n_actions, horizon, device, act_type='discrete'):
 
     with torch.no_grad():
         for _ in range(100):
-            state = env.reset()
+            state, _ = env.reset()
 
             padded_obs = torch.zeros([1, 1, 84]).to(device).float()
             padded_acts = torch.zeros([1, 1, 7]).to(device).float()
@@ -183,7 +183,8 @@ def test_env(label_model, n_actions, horizon, device, act_type='discrete'):
                     q_values.append(labels.flatten()[-1].cpu().numpy())
 
                 action = np.argmax(q_values)
-                state, reward, done, _ = env.step(action)
+                state, reward, terminated, truncated, _ = env.step(action)
+                done = terminated or truncated
 
                 if done:
                     break

@@ -1,7 +1,7 @@
 import copy
 import pickle
 
-import gymnasium as gym
+import gym
 import numpy as np
 import torch
 
@@ -64,7 +64,7 @@ def collect_random_data(
     rewards_ = []
     infos_ = []
     policy_infos_ = []
-    obs = env.reset()
+    obs, _ = env.reset()
     reward = None
     n_gathered = 0
     t = 0
@@ -88,7 +88,8 @@ def collect_random_data(
 
             # Combine actions and take a step
             comb_action = (pr_action * (1-env_alpha) + adv_action * env_alpha).data.clamp(-1, 1).numpy()
-            obs, reward, done, _ = env.step(comb_action)
+            obs, reward, terminated, truncated, _ = env.step(comb_action)
+            done = terminated or truncated
             rewards_.append(reward)
             
             # Process the trajectory if done, and reset
@@ -108,11 +109,11 @@ def collect_random_data(
                 rewards_ = []
                 infos_ = []
                 policy_infos_ = []
-                obs = env.reset()
+                obs, _ = env.reset()
                 reward = None    
 
     with open(data_path, 'wb') as file:
         pickle.dump(trajs, file)
         print('Saved trajectories to dataset file', data_path)  
     
-    return AdvGymEnv(gym.make(load_env_name(env_name)), actual_adv_path, device), trajs
+    return AdvGymEnv(gym.make(load_env_name(env_name)), actual_adv_path, device_str=device_str), trajs

@@ -1,7 +1,7 @@
 import re
 from collections import namedtuple
 
-import gymnasium as gym
+import gym
 import numpy as np
 import torch
 
@@ -36,6 +36,7 @@ class AdvGymEnv:
         self.env = env
         self.env_name = env_name
         self.adv_model_path = adv_model_path
+        self.adv_action_space = env.action_space  # same space in action-robustness framework
         self.basic_bm = basic_bm
         self.env_alpha = env_alpha
         self.reset_adv_agent(adv_model_path, device_str)
@@ -44,8 +45,8 @@ class AdvGymEnv:
 
     def reset(self) -> np.ndarray:
         self.t = 0
-        self.current_state = self.env.reset() 
-        return self.current_state
+        self.current_state, _ = self.env.reset() 
+        return self.current_state, None
     
     def reset_adv_agent(self, adv_model_path: str, device_str: str) -> None:   
         """
@@ -95,21 +96,21 @@ class AdvGymEnv:
             done (bool): The done flag.
             dict: The dictionary of the adversarial action taken.
         """
+        alpha = self.env_alpha
         if adv_action is None and self.adv_model_path != 'zero' and self.adv_model is not None:
             # Adversary action generated using the adversary agent
             state = torch.from_numpy(self.current_state).to(self.adv_model.device, dtype=torch.float32)
             adv_action = self.adv_model.adversary(state).data.clamp(-1, 1).cpu().numpy()
-            state, reward, done, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
-        elif adv_action is not None:
-            # Adversary action provided
-            state, reward, done, _ = self.env.step(pr_action * (1 - self.env_alpha) + adv_action * self.env_alpha)
-        else:
+        elif adv_action is None:
             # No adversary action
+            alpha = 0.0
             adv_action = np.zeros_like(pr_action)
-            state, reward, done, _ = self.env.step(pr_action)
+        comb_action = pr_action * (1 - alpha) + adv_action * alpha
+        state, reward, terminated, truncated, _ = self.env.step(comb_action)
+        done = terminated or truncated
         self.current_state = state
         self.t += 1
-        return state, reward, done, {'adv_action': adv_action}
+        return state, reward, done, None, {'adv_action': adv_action}
 
     def __getattr__(self, attr):
         if (attr not in dir(self)) and (attr != 'reset') and (attr != 'step'):

@@ -15,7 +15,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-import gymnasium as gym
+import gym
 
 def discount_cumsum(x, gamma):
     discount_cumsum = np.zeros_like(x)
@@ -185,7 +185,7 @@ def worst_case_qf(
                 total_loss += ret_loss.item() + act_loss.item()
                 total_act_loss += act_loss.item()
                 total_ret_loss += ret_loss.item()
-                
+
             pbar.set_description(
                 f"Epoch {epoch} | Loss: {total_loss / total_batches:.4f} | loss 1: {total_ret_loss / total_batches:.4f} | loss 2: {total_act_loss / total_batches:.4f}")
 

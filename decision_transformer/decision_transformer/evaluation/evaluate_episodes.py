@@ -11,7 +11,8 @@ def worst_case_env_step(state, action, t, env):
     class_name = env.__class__.__name__
     new_state_ind = -1
     adv_action = np.random.choice(2, 1)
-    _, reward, done, _ = env.step(action)
+    _, reward, terminated, truncated, _ = env.step(action)
+    done = terminated or truncated
     
     if class_name == "GamblingEnv":
         if t == 0:
@@ -70,7 +71,7 @@ def worst_case_env_step(state, action, t, env):
         raise Exception("Env Error")
 
     new_state = np.eye(state.size)[new_state_ind] if new_state_ind != -1 else state
-    return new_state, reward, done, {"adv_action": adv_action}
+    return new_state, reward, done, False, {"adv_action": adv_action}
 
 
 def evaluate(
@@ -173,17 +174,17 @@ def evaluate_episode_rtg(
     model.eval()
     model.to(device=device)
 
-    if not adv_act_dim:
-        adv_act_dim = act_dim
     state_mean = torch.from_numpy(state_mean).to(device=device)
     state_std = torch.from_numpy(state_std).to(device=device)
 
-    state = env.reset()
+    state, _ = env.reset()
     if mode == 'noise':
         state = state + np.random.normal(0, 0.1, size=state.shape)
 
     # we keep all the histories on the device
     # note that the latest action and reward will be "padding"
+    if not adv_act_dim:
+        adv_act_dim = act_dim
     states = torch.from_numpy(state).reshape(1, state_dim).to(device=device, dtype=torch.float32)
     actions = torch.zeros((0, act_dim), device=device, dtype=torch.float32)
     adv_actions = torch.zeros((0, adv_act_dim), device=device, dtype=torch.float32)
@@ -242,9 +243,10 @@ def evaluate_episode_rtg(
         action = action.detach().cpu().numpy()
 
         if worst_case and (env.__class__.__name__ in ["GamblingEnv", "ToyEnv", "MSToyEnv", "NewMSToyEnv"]):
-            state, reward, done, infos = worst_case_env_step(state, action, t, env)
+            state, reward, terminated, truncated, infos = worst_case_env_step(state, action, t, env)
         else:
-            state, reward, done, infos = env.step(action)
+            state, reward, terminated, truncated, infos = env.step(action)
+        done = terminated or truncated
 
         if action_type == 'discrete':
             one_hot_adv_action = torch.zeros(1, adv_act_dim).float()
@@ -300,7 +302,7 @@ def evaluate_episode_batch(
 
     state_mean = torch.from_numpy(state_mean).to(device=device)
     state_std = torch.from_numpy(state_std).to(device=device)
-    states = np.array([env.reset() for env in envs])
+    states = np.array([env.reset()[0] for env in envs])
 
     # we keep all the histories on the device
     # note that the latest action and reward will be "padding"
@@ -331,7 +333,8 @@ def evaluate_episode_batch(
         s_list, r_list = [], []
         for i, env in enumerate(envs):
             if dones_list[i] == 0:
-                s, r, done, _ = env.step(action[i])
+                s, r, terminated, truncated, _ = env.step(action[i])
+                done = terminated or truncated
                 s_list.append(s)
                 r_list.append(r)
                 episode_return[i] += r
@@ -375,7 +378,7 @@ def evaluate_episode(
 
     state_mean = torch.from_numpy(state_mean).to(device=device)
     state_std = torch.from_numpy(state_std).to(device=device)
-    state = env.reset()
+    state, _ = env.reset()
 
     # we keep all the histories on the device
     # note that the latest action and reward will be "padding"
@@ -406,7 +409,8 @@ def evaluate_episode(
             actions[-1] = action
 
         action = action.detach().cpu().numpy()
-        state, reward, done, _ = env.step(action)
+        state, reward, terminated, truncated, _ = env.step(action)
+        done = terminated or truncated
 
         cur_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
         states = torch.cat([states, cur_state], dim=0)

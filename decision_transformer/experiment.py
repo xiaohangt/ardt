@@ -1,7 +1,7 @@
 import pickle
 import random
 
-import gymnasium as gym
+import gym
 import numpy as np
 import torch
 import wandb
@@ -73,19 +73,22 @@ def experiment(
                 traj_dict[key] = np.array(cur_info)
 
         if "adv" in traj.infos[0]:
-            adv_a = np.array([info["adv"] if info else -1 for info in traj.infos])
+            adv_a = np.array([info["adv"] if info else 0 for info in traj.infos])
         elif "adv_action" in traj.infos[0]:
             adv_a = np.array([info["adv_action"] if info else 0 for info in traj.infos])
+        elif action_type == "discrete":
+            adv_a = np.zeros((len(traj_dict["actions"])))
         else:
-            adv_a = np.zeros(len(traj_dict["actions"]), adv_act_dim)
+            adv_a = np.zeros((len(traj_dict["actions"]), adv_act_dim))
 
         if action_type == "discrete":
-            traj_dict['adv_actions'] = np.zeros((adv_a.size, adv_act_dim))
-            traj_dict['adv_actions'][np.arange(adv_a.size), adv_a] = 1
+            traj_dict['adv_actions'] = np.zeros((len(traj_dict["actions"]), adv_act_dim))
+            traj_dict['adv_actions'][np.arange(len(traj_dict["actions"])), adv_a.astype(int)] = 1
             if traj.infos[-1] == {}:
                 traj_dict['adv_actions'][-1] = 0
         else:
             traj_dict['adv_actions'] = adv_a
+        
         trajectories.append(traj_dict)
 
     # save all path information into separate lists
