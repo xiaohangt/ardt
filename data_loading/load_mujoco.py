@@ -1,9 +1,9 @@
 import copy
 import pickle
+from collections import namedtuple
 
 import gym
 import numpy as np
-import torch
 from datasets import Dataset
 
 from arrl.main import load_env_name
@@ -70,6 +70,7 @@ def load_mujoco_env(
         device (str): The device to use.
 
     Returns:
+        task (Task): The task at hand.
         env (AdvGymEnv): The environment.
         trajs (List[Trajectory]): The list of trajectories.
     """
@@ -85,10 +86,14 @@ def load_mujoco_env(
         with open(added_dir_prefix, 'rb') as file:
             added_trajs = pickle.load(file)
 
-    # Combine the datasets and return
+    # Build the task itself with required trajectories
+    task = namedtuple("Task", ["trajs", "test_env_cls"])
+    task.test_env_cls = lambda: env
     if added_data_prop == -1:
-        return env, trajs + added_trajs
+        task.trajs = trajs + added_trajs
     elif added_data_prop > 1:
-        return env, trajs[:int(len(added_trajs) / added_data_prop)] + added_trajs
+        task.trajs = trajs[:int(len(added_trajs) / added_data_prop)] + added_trajs
     else:
-        return env, trajs + added_trajs[:int(len(trajs) * added_data_prop)]
+        task.trajs = trajs + added_trajs[:int(len(trajs) * added_data_prop)]
+    
+    return task, env, task.trajs

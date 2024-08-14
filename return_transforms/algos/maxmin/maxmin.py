@@ -7,15 +7,13 @@ from return_transforms.datasets.discretizer import TrajectoryDiscretizer
 
 from return_transforms.utils.utils import learned_labels
 from tqdm.autonotebook import tqdm
-from copy import deepcopy
 
-import gc
-import pickle
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import gym
+
 
 def discount_cumsum(x, gamma):
     discount_cumsum = np.zeros_like(x)
@@ -25,22 +23,22 @@ def discount_cumsum(x, gamma):
     return discount_cumsum
 
 
-def worst_case_qf(
-          env_name,
-          trajs,
-          action_space,
-          adv_action_space,
-          train_args,
-          device,
-          n_cpu,
-          lr,
-          wd,
-          is_simple_model,
-          batch_size,
-          leaf_weight=0.5,
-          alpha=0.01,
-          discretization=False):
-
+def maxmin(
+        trajs,
+        action_space,
+        adv_action_space,
+        train_args,
+        device,
+        n_cpu,
+        lr=1e-3,
+        wd=1e-4,
+        leaf_weight=0.5,
+        alpha=0.01,
+        batch_size=128,
+        discretization=False,
+        is_simple_model=False,
+        is_toy=False
+    ):
     # Check if discrete action space
     if isinstance(action_space, gym.spaces.Discrete):
         action_size = action_space.n
@@ -118,10 +116,8 @@ def worst_case_qf(
             total_batches += 1
             bsz, t = obs.shape[:2]
             # Recover adv
-            if env_name == "toy":
+            if is_toy:
                 t -= 1
-                # adv_acts_ind = (torch.where(obs[:, -1] > 0)[1] - 1) % 3
-                # adv_acts = torch.nn.functional.one_hot(adv_acts_ind).unsqueeze(1).float().to(device) # (bsz, seq_len-1, ...)
                 obs, acts, ret, adv_acts = obs[:, :-1], acts[:, :-1], ret[:, :-1], adv_acts[:, :-1]
 
             # some environment has no terminal state
@@ -210,7 +206,7 @@ def worst_case_qf(
 
             avg_returns.append(np.round(returns * scale, decimals=3))
 
-    return avg_returns, np.round(prompt_value * scale, decimals=3), qsa2_model
+    return avg_returns, np.round(prompt_value * scale, decimals=3)
     
 def get_one_hot(predicted_adv):
     predicted_adv_top2 =  torch.topk(predicted_adv, k=2, dim=-1)[0]
