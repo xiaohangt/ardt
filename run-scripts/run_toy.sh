@@ -7,7 +7,7 @@ python main.py \
     --seed $seed \
     --data_name "toy" \
     --env_name "toy" \
-    --ret_file "data/${algo}_toy_ll${ll}" \
+    --ret_file "offline_data/${algo}_toy_seed${seed}" \
     --device $device \
     --algo $algo \
     --config "configs/${algo}/toy.yaml" \

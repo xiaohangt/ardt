@@ -8,7 +8,7 @@ import torch
 
 from data_loading.load_mujoco import load_mujoco_env, Trajectory
 from decision_transformer.experiment import experiment
-from return_transforms.generate import generate_mean, generate_maxmin
+from return_transforms.generate import generate_expected, generate_maxmin
 
 from stochastic_offline_envs.envs.offline_envs.connect_four_offline_env import ConnectFourOfflineEnv
 from stochastic_offline_envs.envs.connect_four.connect_four_env import GridWrapper
@@ -64,7 +64,6 @@ def load_env(
         env_alpha: float = 0.1
     ) -> tuple[gym.Env, list[Trajectory], dict]:
     print(f'Loading task: {env_name}')
-
     if 'connect_four' in env_name:
         task = ConnectFourOfflineEnv(data_name=data_name, test_regen_prob=eval(test_adv))
         env = GridWrapper(task.env_cls())
@@ -129,7 +128,6 @@ def load_env(
             "scale": 1000, 
             "action_type": "continuous"
         }
-        
     print(f"Finished loading task with {len(trajs)} trajectories.")
     return (
         env,
@@ -152,12 +150,7 @@ if __name__ == '__main__':
     # for return transformation: 
     parser.add_argument('--algo', type=str, required=True, choices=['ardt', 'dt', 'esper', 'bc'])
     parser.add_argument('--config', type=str, required=True)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--leaf_weight', type=float, default=0.9)
-    parser.add_argument('--alpha', type=float, default=0.01)
-    parser.add_argument('--lr', type=float, default=1e-3) 
-    parser.add_argument('--wd', type=float, default=1e-4) 
-    parser.add_argument('--is_simple_model', action='store_true')
+    parser.add_argument('--is_simple_maxmin_model', action='store_true')
 
     # for decision transformer:
     parser.add_argument('--checkpoint_dir', type=str, default=None)
@@ -229,16 +222,11 @@ if __name__ == '__main__':
                 variant['ret_file'], 
                 variant['device'], 
                 variant['n_cpu'], 
-                lr=variant['lr'], 
-                wd=variant['wd'], 
-                leaf_weight=variant['leaf_weight'], 
-                alpha=variant['alpha'],
-                batch_size=variant['batch_size'], 
-                is_simple_model=variant['is_simple_model'],
+                is_simple_model=variant['is_simple_maxmin_model'],
                 is_toy=(variant['env_name'] == 'toy')
             )
         elif variant['algo'] == 'esper':
-            generate_mean(
+            generate_expected(
                 env, 
                 offline_trajs, 
                 variant['config'], 

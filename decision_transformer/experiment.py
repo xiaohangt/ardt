@@ -119,8 +119,8 @@ def experiment(
     print(f'Max return: {np.max(returns):.2f}, min: {np.min(returns):.2f}')
     print('=' * 50)
 
-    pickle.dump([np.mean(returns), np.std(returns)], open(f'data/data_profile_{rtg_path}.pkl', 'wb'))
-    print(f"data/data_profile_{rtg_path}.pkl")
+    pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{rtg_path}.pkl', 'wb'))
+    print(f"offline_data/data_profile_{rtg_path}.pkl")
 
     K = variant['K']
     batch_size = variant['batch_size']

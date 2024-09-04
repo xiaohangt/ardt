@@ -30,11 +30,6 @@ def maxmin(
         train_args,
         device,
         n_cpu,
-        lr=1e-3,
-        wd=1e-4,
-        leaf_weight=0.5,
-        alpha=0.01,
-        batch_size=128,
         discretization=False,
         is_simple_model=False,
         is_toy=False
@@ -80,11 +75,11 @@ def maxmin(
         qsa_model = RtgLSTM(obs_size, action_size, adv_action_size, train_args, include_adv=False).to(device)
 
 
-    qsa2_optimizer = optim.AdamW(qsa2_model.parameters(), lr=lr, weight_decay=wd)
-    qsa_optimizer = optim.AdamW(qsa_model.parameters(), lr=lr, weight_decay=wd)
+    qsa2_optimizer = optim.AdamW(qsa2_model.parameters(), lr=train_args['model_lr'], weight_decay=train_args['model_wd'])
+    qsa_optimizer = optim.AdamW(qsa_model.parameters(), lr=train_args['model_lr'], weight_decay=train_args['model_wd'])
 
     dataloader = torch.utils.data.DataLoader(dataset,
-                                             batch_size=batch_size,
+                                             batch_size=train_args['batch_size'],
                                              num_workers=n_cpu)
 
     # Calculate epoch markers
@@ -97,7 +92,7 @@ def maxmin(
     qsa_model.train()
 
     def expectile_fn(td_error, act_mask, discount_weighted=False):
-        batch_loss = torch.abs(alpha - F.normalize(F.relu(td_error), dim=-1)) * (td_error ** 2)
+        batch_loss = torch.abs(train_args['alpha'] - F.normalize(F.relu(td_error), dim=-1)) * (td_error ** 2)
         assert not discount_weighted
         if discount_weighted:
             weights = 0.5 ** np.array(range(len(batch_loss)))[::-1]
@@ -172,7 +167,7 @@ def maxmin(
                 ret_a2_pred = qsa2_model(obs, acts, adv_acts)
 
                 ret_leaf_loss = ((ret_a2_pred[range(bsz), seq_len].flatten() - ret[range(bsz), seq_len]) ** 2).mean()
-                ret_a2_loss = expectile_fn(ret_a_pred[:, 1:].detach() + rewards - ret_a2_pred[:, :-1], act_mask[:, :-1]) * (1 - leaf_weight) + ret_leaf_loss * leaf_weight                    
+                ret_a2_loss = expectile_fn(ret_a_pred[:, 1:].detach() + rewards - ret_a2_pred[:, :-1], act_mask[:, :-1]) * (1 - train_args['leaf_weight']) + ret_leaf_loss * train_args['leaf_weight']                    
 
                 ret_loss = ret_a2_loss
                 ret_a2_loss.backward()

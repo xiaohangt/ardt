@@ -3,8 +3,13 @@ normalize: false
 train_args:
   gamma: 1.0
   scale: 1000.0
+  model_lr: 0.0001
+  model_wd: 0.00001
+  batch_size: 512
   mse_epochs: 10
   maxmin_epochs: 50
+  alpha: 0.01
+  leaf_weight: 0.9
   ret_obs_act_model_args:
     hidden_size: 512
     num_layers: 2

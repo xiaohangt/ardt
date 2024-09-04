@@ -7,7 +7,7 @@ python main.py \
     --seed $seed \
     --data_name "mstoy" \
     --env_name "mstoy" \
-    --ret_file "data/${algo}_mstoy_ll${ll}" \
+    --ret_file "offline_data/${algo}_mstoy_seed${seed}" \
     --device $device \
     --algo $algo \
     --config "configs/${algo}/mstoy.yaml" \

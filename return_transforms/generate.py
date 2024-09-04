@@ -24,7 +24,7 @@ def _normalize_obs(trajs: list[Trajectory]) -> list[Trajectory]:
     return trajs
 
 
-def generate_mean(
+def generate_expected(
         env: gym.Env, 
         trajs: list[Trajectory], 
         config: dict, 
@@ -62,11 +62,6 @@ def generate_maxmin(
         ret_file: str, 
         device: str, 
         n_cpu: int,
-        lr: float = 1e-3, 
-        wd: float = 1e-4, 
-        leaf_weight: float = 0.5, 
-        alpha: float = 0.01, 
-        batch_size: int = 128, 
         is_simple_model: bool = False, 
         is_toy: bool = False
     ):
@@ -84,11 +79,6 @@ def generate_maxmin(
         config['train_args'],
         device,
         n_cpu,
-        lr=lr,
-        wd=wd,
-        leaf_weight=leaf_weight,
-        alpha=alpha,
-        batch_size=batch_size,
         is_simple_model=is_simple_model,
         is_toy=is_toy
     )

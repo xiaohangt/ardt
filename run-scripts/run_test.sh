@@ -2,13 +2,11 @@
 seed=$1                 # desired seed
 algo=$2                 # ardt, dt, esper
 device=$3               # cpu, cuda
-ll=$4                   # leaf weight, range [0, 1], recommended 0.9
-alpha=$5                # alpha, range [0, 1], recommended 0.01
-model_type=$6           # adt, dt, bc
-env_name=$7             # halfcheetah, hopper, walker2d
-mix_coef=$8             # proportion of random data, range [0, 1]
-env_alpha=$9            # alpha for action weights, range [0, 1], default 0.1
-num_eval_episodes=${10} # number of evaluation episodes, default 100
+model_type=$4           # adt, dt, bc
+env_name=$5             # halfcheetah, hopper, walker2d
+mix_coef=$6             # proportion of random data, range [0, 1]
+env_alpha=$7            # alpha for action weights, range [0, 1], default 0.1
+num_eval_episodes=$8    # number of evaluation episodes, default 100
 
 
 # #
@@ -18,7 +16,7 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #     --seed $seed \
 #     --data_name "toy" \
 #     --env_name "toy" \
-#     --ret_file "data/${algo}_toy_ll${ll}" \
+#     --ret_file "offline_data/${algo}_toy_seed${seed}" \
 #     --device $device \
 #     --algo $algo \
 #     --config "configs/${algo}/test.yaml" \
@@ -36,7 +34,7 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #     --seed $seed \
 #     --data_name "mstoy" \
 #     --env_name "mstoy" \
-#     --ret_file "data/${algo}_mstoy_ll${ll}" \
+#     --ret_file "offline_data/${algo}_mstoy_seed${seed}" \
 #     --device $device \
 #     --algo $algo \
 #     --config "configs/${algo}/test.yaml" \
@@ -55,7 +53,7 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #     for adv_opt in 50
 #     do
 #         d_name="c4data_mdp_${learner_opt}_mdp_${adv_opt}"
-#         ret_file="data/${algo}${mode}_${d_name}_new_new_ll${ll}_al${alpha}_${seed}"
+#         ret_file="offline_data/${algo}${mode}_${d_name}_new_new_seed${seed}_al${alpha}_${seed}"
 
 #         # Adjust the test-time adversary by changing --test_adv
 #         python main.py \
@@ -66,8 +64,6 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #             --device $device \
 #             --algo $algo \
 #             --config "configs/${algo}/test.yaml" \
-#             --leaf_weight $ll \
-#             --alpha $alpha \
 #             --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${alpha}_seed${seed}" \
 #             --model_type "dt" \
 #             --K 22 \
@@ -90,7 +86,7 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 # # mix_coef here defines the proportion between collected and random data
 # for added_data_prop in "${mix_coef}"
 # do
-#     ret_file="data/${algo}_${d_name}_${added_data_name}_${added_data_prop}"
+#     ret_file="offline_data/${algo}_${d_name}_${added_data_name}_${added_data_prop}"
 
 #     # Training
 #     python main.py \
@@ -104,9 +100,6 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #         --device $device \
 #         --algo $algo \
 #         --config "configs/${algo}/test.yaml" \
-#         --batch_size 512 \
-#         --leaf_weight $ll \
-#         --alpha $alpha \
 #         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed${seed}" \
 #         --K 20 \
 #         --model_type $model_type \
@@ -128,9 +121,6 @@ num_eval_episodes=${10} # number of evaluation episodes, default 100
 #         --device $device \
 #         --algo $algo \
 #         --config "configs/${algo}/test.yaml" \
-#         --batch_size 512 \
-#         --leaf_weight $ll \
-#         --alpha $alpha \
 #         --checkpoint_dir "checkpoints/${algo}_${model_type}_${d_name}_${added_data_name}_${added_data_prop}_seed$(( $seed % 5 ))" \
 #         --K 20 \
 #         --model_type $model_type \
