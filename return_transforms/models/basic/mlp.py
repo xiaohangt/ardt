@@ -1,9 +1,18 @@
 import torch
-import torch.functional as F
 
 
 class MLP(torch.nn.Module):
-    def __init__(self, input_size, output_size, hidden_size, num_layers, activation, batchnorm=False, layernorm=False, dropout=0.0):
+    def __init__(
+            self, 
+            input_size: int, 
+            output_size: int, 
+            hidden_size: int, 
+            num_layers: int, 
+            activation: str = 'relu', 
+            dropout: float = 0.0,
+            batchnorm: bool = False, 
+            layernorm: bool = False
+        ):
         super(MLP, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
@@ -12,7 +21,7 @@ class MLP(torch.nn.Module):
         if activation == 'relu':
             self.activation = torch.nn.ReLU
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f'Activation {activation} not implemented')
         self.batchnorm = batchnorm
         self.layernorm = layernorm
         self.dropout = dropout
@@ -37,7 +46,7 @@ class MLP(torch.nn.Module):
                 self.layers.append(torch.nn.Dropout(self.dropout))
         self.layers.append(torch.nn.Linear(self.hidden_size, self.output_size))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
             x = layer(x)
         return x

@@ -38,12 +38,13 @@ def maxmin(
         is_discretize: bool = False,
     ):
     # Initialize state and action spaces
-    obs_size = np.prod(trajs[0].obs[0].shape)
     if isinstance(action_space, gym.spaces.Discrete):
+        obs_size = np.prod(trajs[0].obs[0].shape)
         action_size = action_space.n
         adv_action_size = adv_action_space.n
         action_type = 'discrete'
     else:
+        obs_size = np.prod(np.array(trajs[0].obs[0]).shape)
         action_size = action_space.shape[0]
         adv_action_size = adv_action_space.shape[0]
         action_type = 'continuous'

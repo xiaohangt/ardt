@@ -86,7 +86,6 @@ class ClusterModel(torch.nn.Module):
         ret_pred = self.ret_model_args(ret_input).view(bsz, t, -1)
 
         # ================ Compute action prediction ================
-
         # First, we need to get the past indices
         idxs = get_past_indices(obs_act_reps, seq_len)
         idxs = idxs.view(bsz, t, 1).expand(bsz, t, self.rep_size)
@@ -100,9 +99,6 @@ class ClusterModel(torch.nn.Module):
         return clusters, ret_pred, act_pred, hidden
 
     def return_preds(self, obs, action, hard=False):
-        """
-        Returns the return predictions for the given trajectories.
-        """
         bsz, t = obs.shape[:2]
         obs = obs.view(bsz, t, -1)
 
@@ -116,8 +112,10 @@ class ClusterModel(torch.nn.Module):
         obs_act_reps = self.obs_action_model(x).view(bsz, t, -1)
 
         # Use LSTM to get the representations for each suffix of the sequence
-        hidden = (torch.zeros(1, bsz, self.hidden_size).to(x.device),
-                  torch.zeros(1, bsz, self.hidden_size).to(x.device))
+        hidden = (
+            torch.zeros(1, bsz, self.hidden_size).to(x.device),
+            torch.zeros(1, bsz, self.hidden_size).to(x.device)
+        )
 
         x, hidden = self.lstm_model(obs_act_reps, hidden)
 
