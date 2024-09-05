@@ -37,12 +37,10 @@ class ESPERDataset(IterableDataset):
             padded_obs[-obs.shape[0]:] = obs
             padded_acts[-obs.shape[0]:] = actions
             padded_rets[-obs.shape[0]:] = np.array(rets)
-            seq_length = obs.shape[0]
 
             yield torch.tensor(padded_obs).float(), \
                 torch.tensor(padded_acts).float(), \
-                torch.tensor(padded_rets).float(), \
-                torch.tensor(seq_length).long()
+                torch.tensor(padded_rets).float()
 
     def __len__(self):
         return int(self.epoch_len)

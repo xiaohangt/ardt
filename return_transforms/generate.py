@@ -1,10 +1,9 @@
 import pickle
 from pathlib import Path
 
+import gym
 import numpy as np
 import yaml
-
-import gym
 
 from data_loading.load_mujoco import Trajectory
 from return_transforms.algos.esper.esper import esper

@@ -68,13 +68,11 @@ class ARDTDataset(IterableDataset):
             padded_acts[1:obs.shape[0] + 1] = actions
             padded_adv_acts[1:obs.shape[0] + 1] = adv_actions
             padded_rets[1:obs.shape[0] + 1] = np.array(rets)
-            seq_length = obs.shape[0]
 
             yield torch.tensor(padded_obs).float(), \
                 torch.tensor(padded_acts).float(), \
-                torch.tensor(padded_rets).float(), \
-                torch.tensor(seq_length).long(), \
-                torch.tensor(padded_adv_acts).float()
+                torch.tensor(padded_adv_acts).float(), \
+                torch.tensor(padded_rets).float()
 
     def __len__(self):
         return int(self.epoch_len)
