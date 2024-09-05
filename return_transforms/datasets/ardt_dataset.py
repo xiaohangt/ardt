@@ -25,8 +25,8 @@ class ARDTDataset(IterableDataset):
         self.n_actions = n_actions
         self.n_adv_actions = n_adv_actions
         self.horizon = horizon
-        self.epoch_len = epoch_len
         self.act_type = act_type
+        self.epoch_len = epoch_len
         self.new_rewards = new_rewards
 
     def segment_generator(self, epoch_len):
@@ -34,8 +34,8 @@ class ARDTDataset(IterableDataset):
             traj_idx = self.rand.integers(len(self.trajs))
             traj = self.trajs[traj_idx]
             rets = self.rets[traj_idx]
-            if self.new_rewards and len(np.where(np.array(rets) > 1)[0]) > 0:
-                breakpoint()
+            obs = np.array(traj.obs)
+
             if self.act_type == 'discrete':
                 a = np.array(traj.actions)
                 if "adv" in traj.infos[0]:
@@ -57,22 +57,22 @@ class ARDTDataset(IterableDataset):
             else:
                 actions = np.array(traj.actions)
                 adv_actions = np.array([info["adv"] if info else 0. for info in traj.infos])
-            obs = np.array(traj.obs)
 
             padded_obs = np.zeros((self.horizon, *obs.shape[1:]))
             padded_acts = np.zeros((self.horizon, self.n_actions))
             padded_adv_acts = np.zeros((self.horizon, self.n_adv_actions))
             padded_rets = np.zeros(self.horizon)
-
             padded_obs[1:obs.shape[0] + 1] = obs
             padded_acts[1:obs.shape[0] + 1] = actions
             padded_adv_acts[1:obs.shape[0] + 1] = adv_actions
             padded_rets[1:obs.shape[0] + 1] = np.array(rets)
 
-            yield torch.tensor(padded_obs).float(), \
-                torch.tensor(padded_acts).float(), \
-                torch.tensor(padded_adv_acts).float(), \
+            yield (
+                torch.tensor(padded_obs).float(),
+                torch.tensor(padded_acts).float(),
+                torch.tensor(padded_adv_acts).float(),
                 torch.tensor(padded_rets).float()
+            )
 
     def __len__(self):
         return int(self.epoch_len)
@@ -80,10 +80,9 @@ class ARDTDataset(IterableDataset):
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         self.rand = np.random.default_rng(None)
-        if worker_info is None:  # single-process data loading, return the full iterator
+        if worker_info is None:
             gen = self.segment_generator(int(self.epoch_len))
-        else:  # in a worker process
-            # split workload
+        else:
             per_worker_time_steps = int(
                 self.epoch_len / float(worker_info.num_workers))
             gen = self.segment_generator(per_worker_time_steps)
