@@ -7,7 +7,6 @@ from tqdm.autonotebook import tqdm
 from data_loading.load_mujoco import Trajectory
 from return_transforms.models.ardt.maxmin_model import RtgFFN, RtgLSTM
 from return_transforms.datasets.ardt_dataset import ARDTDataset
-from return_transforms.datasets.discretizer import TrajectoryDiscretizer
 
 
 def _expectile_fn(
@@ -38,16 +37,6 @@ def maxmin(
         is_toy: bool = False,
         is_discretize: bool = False,
     ):
-    # Discretize dataset if so specified (currently always set to false)
-    if is_discretize:
-        discretizer = TrajectoryDiscretizer(trajs, 12, 20)
-        action_type = 'discrete'
-        action_size = discretizer.discrete_acts_dim
-        adv_action_size = discretizer.discrete_adv_acts_dim
-        data_trajs = discretizer.discrete_traj
-    else:
-        data_trajs = trajs
-
     # Initialize state and action spaces
     obs_size = np.prod(trajs[0].obs[0].shape)
     if isinstance(action_space, gym.spaces.Discrete):
@@ -62,7 +51,7 @@ def maxmin(
     # Build dataset and dataloader
     max_len = max([len(traj.obs) for traj in trajs]) + 1
     dataset = ARDTDataset(
-        data_trajs, 
+        trajs, 
         action_size, 
         adv_action_size, 
         max_len, 
@@ -189,7 +178,7 @@ def maxmin(
     with torch.no_grad():
         learned_returns = []
         prompt_value = -np.inf    
-        for traj in tqdm(data_trajs):
+        for traj in tqdm(trajs):
             # Predict returns
             obs = torch.from_numpy(np.array(traj.obs)).float().to(device).view(1, -1, obs_size)
             acts = torch.from_numpy(np.array(traj.actions)).to(device).view(1, -1)
