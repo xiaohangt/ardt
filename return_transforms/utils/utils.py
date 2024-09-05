@@ -1,33 +1,49 @@
 import numpy as np
 import torch
 
+from data_loading.load_mujoco import Trajectory
+from models.esper.cluster_model import ClusterModel
 
-def get_past_indices(x, seq_len):
+
+def get_past_indices(x: torch.Tensor, seq_len: int) -> torch.Tensor:
     """
-    Note: this assumes that padding is actually before the sequence.
+    Generate a tensor of indices for non-padded sequences. Assumes padding is applied 
+    before the actual sequence.
 
-    Often we want to get a tensor of indices for another tensor of shape
-    (bsz, T, ...). These indices (bsz, T) should be between the start of the
-    non-padded inputs and T. This function returns such an index tensor.
+    Args:
+        x (torch.Tensor): Input tensor of shape (batch_size, T, ...).
+        t (int): Length of the sequence.
+
+    Returns:
+        torch.Tensor: A tensor of shape (batch_size, T) containing valid indices.
     """
-    bsz, t = x.shape[:2]
+    batch_size = x.size(0)
+    seq_len = x.size(1)
+    idxs = torch.randint(0, seq_len, (batch_size, seq_len), device=x.device)
+    steps = torch.arange(0, seq_len, device=x.device).view(1, seq_len).expand(batch_size, seq_len)
 
-    idxs = torch.randint(0, t, (bsz, t)).to(x)
-    ts = torch.arange(0, t).view(1, t).expand(bsz, t).to(x)
-    
-    pad_lens = t - seq_len.view(bsz, 1).expand(bsz, t)  # Denotes how much padding is before each sequence
-    ts = ts - pad_lens + 1  # Shifts the indices so that the first non-padded index is 0
+    # Assumes uniform padding length for all sequences in a batch
+    # and shifts steps by padding lengths to start from non-padded positions
+    pad_lens = seq_len - seq_len
+    steps = steps - pad_lens.unsqueeze(1) + 1
 
-    # If ts == 0, then set idxs to 0. Otherwise, use the remainder of the division.
-    idxs = torch.where(ts == 0, torch.zeros_like(idxs), idxs % ts)
-
-    # Now add back the padding lengths
-    idxs = idxs + pad_lens
-
-    return idxs.long()
+    # Ensure indices are within valid range and adjust back by padding lengths
+    idxs = torch.where(steps == 0, torch.zeros_like(idxs), idxs % steps)
+    return (idxs + pad_lens.unsqueeze(1)).long()
 
 
-def return_labels(traj, gamma=1, new_rewards=False):
+def return_labels(traj: Trajectory, gamma: float = 1.0, new_rewards: bool = False) -> list:
+    """
+    Compute the return labels for a trajectory.
+
+    Args:
+        traj: Trajectory object
+        gamma: Discount factor
+        new_rewards: Whether to normalize the returns by the length of the trajectory
+
+    Returns:
+        List of return labels
+    """
     rewards = traj.rewards
     returns = []
     ret = 0
@@ -42,7 +58,23 @@ def return_labels(traj, gamma=1, new_rewards=False):
     return returns
 
 
-def learned_labels(traj, label_model, n_actions, horizon, device, act_type='discrete'):
+def learned_labels(
+        traj: Trajectory, label_model: ClusterModel, n_actions: int, horizon: int, device: str, act_type: str
+    ) -> np.ndarray:
+    """
+    Compute the learned labels for a trajectory.
+
+    Args:
+        traj: Trajectory object
+        label_model: ClusterModel object
+        n_actions: Number of actions
+        horizon: Horizon of the model
+        device: Device to run the model on
+        act_type: Type of actions
+
+    Returns:
+        List of learned labels
+    """
     with torch.no_grad():
         label_model.eval()
         obs = np.array(traj.obs)
@@ -53,14 +85,10 @@ def learned_labels(traj, label_model, n_actions, horizon, device, act_type='disc
         else:
             actions = np.array(traj.actions)
 
-        labels = []
-
         padded_obs = np.zeros((horizon, *obs.shape[1:]))
         padded_acts = np.zeros((horizon, n_actions))
-
         padded_obs[-obs.shape[0]:] = obs
         padded_acts[-obs.shape[0]:] = actions
-
         padded_obs = torch.tensor(padded_obs).float().unsqueeze(0).to(device)
         padded_acts = torch.tensor(padded_acts).float().unsqueeze(0).to(device)
 
