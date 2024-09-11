@@ -1,37 +1,38 @@
 import os
 import pickle
 import time
-
-import wandb
+from typing import Any
 
 
 class CheckpointTimer:
-	def __init__(self, checkpoint_every):
+	def __init__(self, checkpoint_every: int):
 		self.checkpoint_every = checkpoint_every
-		self.last_chk = 0
+		self.last_checkpoint = 0
 
 	def should(self):
-		now = time.time()
-		return now - self.last_chk >= self.checkpoint_every
+		return time.time() - self.last_checkpoint >= self.checkpoint_every
 
 	def done(self):
-		now = time.time()
-		self.last_chk = now
+		self.last_checkpoint = time.time()
 
 
 class PreemptionManager:
-	def __init__(self, checkpoint_dir, checkpoint_every=0, checkpoint_timer=None, prefix=''):
+	def __init__(
+			self, 
+			checkpoint_dir: str, 
+			checkpoint_every: int = 0, 
+			checkpoint_timer: CheckpointTimer = None, 
+			prefix: str = ''
+		):
 		self.checkpoint_dir = checkpoint_dir
-		self._wandb_id = None
-		self.prefix = prefix
 		if checkpoint_timer is None:
 			self.checkpoint_timer = CheckpointTimer(checkpoint_every)
 		else:
 			self.checkpoint_timer = checkpoint_timer
-		self.last_chk = 0
+		self.prefix = prefix
 		self.stored = dict()
 
-	def _load_data(self, name):
+	def _load_data(self, name: str):
 		if self.checkpoint_dir is not None:
 			path = os.path.join(self.checkpoint_dir, f'{self.prefix}_{name}.pkl')
 			if os.path.exists(path):
@@ -40,8 +41,21 @@ class PreemptionManager:
 					data = pickle.load(file)
 				return data
 		return None
+	
+	def load_if_exists(self, name: str, default_value: Any):
+		data = self._load_data(name)
+		if data is None:
+			return default_value
+		return data
 
-	def save(self, name, data, now=False):
+	def load_torch(self, name: str, torch_class: Any, *args, **kwargs):
+		state_dict = self._load_data(name)
+		model = torch_class(*args, **kwargs)
+		if state_dict is not None:
+			model.load_state_dict(state_dict)
+		return model
+	
+	def save(self, name: str, data: Any, now: bool = False):
 		if now:
 			if self.checkpoint_dir is not None:
 				if not os.path.exists(self.checkpoint_dir):
@@ -51,44 +65,6 @@ class PreemptionManager:
 					pickle.dump(data, path)
 		else:
 			self.stored[name] = data
-
-	def wandb_id(self):
-		if self._wandb_id is not None:
-			return self._wandb_id
-
-		self._wandb_id = self._load_data('wandb_id')
-
-		if self._wandb_id is None:
-			self._wandb_id = wandb.util.generate_id()
-
-			self.save('wandb_id', self._wandb_id, now=True)
-
-		return self._wandb_id
-
-	def load_torch(self, name, cl, *args, **kwargs):
-		state_dict = self._load_data(name)
-		model = cl(*args, **kwargs)
-		if state_dict is not None:
-			model.load_state_dict(state_dict)
-		return model
-
-	def exists(self, name):
-		if self.checkpoint_dir is not None:
-			path = os.path.join(self.checkpoint_dir, f'{self.prefix}_{name}.pkl')
-			return os.path.exists(path)
-		return False
-
-	def save_torch(self, name, model):
-		self.save(name, model.state_dict())
-
-	def load_if_exists(self, name, value):
-		data = self._load_data(name)
-		if data is None:
-			return value
-		return data
-
-	def for_obj(self, prefix):
-		return PreemptionManager(self.checkpoint_dir, prefix=prefix, checkpoint_timer=self.checkpoint_timer)
 
 	def checkpoint(self):
 		if self.checkpoint_timer.should():

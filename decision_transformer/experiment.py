@@ -408,9 +408,9 @@ def experiment(
     print("Trained for iterations:", completed_iters)
     for iter in range(completed_iters, variant['train_iters']):
         outputs = trainer.train_iteration(num_steps=variant['num_steps_per_iter'], iter_num=iter+1, print_logs=True)
-        pm.save_torch('optimizer', optimizer)
-        pm.save_torch('scheduler', scheduler)
-        pm.save_torch('model', model)
+        pm.save('optimizer', optimizer.state_dict())
+        pm.save('scheduler', scheduler.state_dict())
+        pm.save('model', model.state_dict())
         pm.checkpoint()
         if log_to_wandb:
             wandb.log(outputs)
