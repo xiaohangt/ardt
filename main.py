@@ -172,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--weight_decay', '-wd', type=float, default=1e-4)
     parser.add_argument('--warmup_steps', type=int, default=1000)
+    parser.add_argument('--grad_clip_norm', type=float, default=0.25)
 
     parser.add_argument('--train_iters', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=128)

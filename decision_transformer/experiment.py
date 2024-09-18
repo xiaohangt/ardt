@@ -18,7 +18,7 @@ from decision_transformer.decision_transformer.training.adv_seq_trainer import A
 from decision_transformer.decision_transformer.utils.preemption import PreemptionManager
 
 
-def eval_episodes(target_rew):
+def eval_episodes(target_return):
         is_argmax = variant["argmax"]
         num_eval_episodes = 1 if variant['argmax'] else variant['num_eval_episodes']
         def fn(model):
@@ -33,7 +33,7 @@ def eval_episodes(target_rew):
                                     act_dim,
                                     model,
                                     max_ep_len=max_ep_len,
-                                    target_return=target_rew / scale,
+                                    target_return=target_return/scale,
                                     mode=variant.get('mode', 'normal'),
                                     state_mean=state_mean,
                                     state_std=state_std,
@@ -43,7 +43,7 @@ def eval_episodes(target_rew):
                     lengths.append(length)
             else:
                 returns, lengths = evaluate(
-                    target_rew, 
+                    target_return, 
                     model_type, 
                     num_eval_episodes, 
                     task, 
@@ -63,15 +63,15 @@ def eval_episodes(target_rew):
                 )
             
             show_res_dict = {
-                f'target_{target_rew}_return_mean': np.mean(returns),
-                f'target_{target_rew}_return_std': np.std(returns),
+                f'target_{target_return}_return_mean': np.mean(returns),
+                f'target_{target_return}_return_std': np.std(returns),
             }
 
             result_dict = {
-                f'target_{target_rew}_return_mean': np.mean(returns),
-                f'target_{target_rew}_return_std': np.std(returns),
-                f'target_{target_rew}_length_mean': np.mean(lengths),
-                f'target_{target_rew}_length_std': np.std(lengths),
+                f'target_{target_return}_return_mean': np.mean(returns),
+                f'target_{target_return}_return_std': np.std(returns),
+                f'target_{target_return}_length_mean': np.mean(lengths),
+                f'target_{target_return}_length_std': np.std(lengths),
             }
 
             # dump information to that file
@@ -84,12 +84,12 @@ def eval_episodes(target_rew):
             env_alpha = env.env_alpha if hasattr(env, 'env_alpha') else None
             
             if variant['algo'] != 'dt':
-                save_path = f'results/{rtg_path}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_rew}_{seed}.pkl'
+                save_path = f'results/{rtg_path}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_return}_{seed}.pkl'
             else:
                 added_data_name = variant['added_data_name']
                 added_data_prop = variant['added_data_prop']
                 algo = variant['algo']
-                save_path = f'results/{algo}_original_{d_name}_{added_data_name}_{added_data_prop}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_rew}_{seed}.pkl'
+                save_path = f'results/{algo}_original_{d_name}_{added_data_name}_{added_data_prop}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_return}_{seed}.pkl'
                 
             pickle.dump(result_dict, open(save_path, 'wb'))
             print("Evaluation results", show_res_dict, "saved to ", save_path)
@@ -307,6 +307,7 @@ def experiment(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm']))
             context_size=variant['K'],
             with_adv_action=False,
             env_name=env_name,
@@ -321,6 +322,7 @@ def experiment(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm'])),
             context_size=variant['K'],
             with_adv_action=True,
             env_name=env_name,
@@ -333,6 +335,7 @@ def experiment(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            gradients_clipper=None,
             context_size=variant['K'],
             with_adv_action=False,
             env_name=env_name,

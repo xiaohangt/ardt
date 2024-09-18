@@ -39,6 +39,7 @@ class Trainer:
             model: torch.nn.Module, 
             optimizer: torch.optim.optimizer,
             scheduler: torch.optim.lr_scheduler,
+            gradients_clipper: function | None,
             context_size: int,
             with_adv_action: bool,
             env_name: str,
@@ -54,6 +55,7 @@ class Trainer:
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.gradients_clipper = gradients_clipper
         self.context_size = context_size
         self.with_adv_action = with_adv_action
         # data
@@ -69,10 +71,10 @@ class Trainer:
 
     def _get_loss_fn(self, action_type):
         if action_type == 'continuous':
-            return lambda s_hat, a_hat, r_hat, s, a, r: torch.mean((a_hat - a)**2)
+            return lambda a_hat, a: torch.mean((a_hat - a)**2)
         else:
             ce_loss = torch.nn.CrossEntropyLoss()
-            return lambda s_hat, a_hat, r_hat, s, a, r: ce_loss(a_hat, torch.argmax(a, dim=-1))
+            return lambda a_hat, a: ce_loss(a_hat, torch.argmax(a, dim=-1))
 
     def get_batch(
             self,  
@@ -88,7 +90,9 @@ class Trainer:
 
         # process
         s, a, adv_a, r, d, rtg, timesteps, mask = [], [], [], [], [], [], [], []
+        
         for i in range(self.batch_size):
+            # selecting trajectories and start point
             traj = self.trajectories[int(self.trajectories_sorted_idx[batch_idx[i]])]
             if self.env_name not in ["halfcheetah", "hopper", "walker2d"]:
                 si = 0
@@ -109,7 +113,7 @@ class Trainer:
             else:
                 d.append(traj['dones'][si:si + self.context_size].reshape(1, -1))
             timesteps.append(np.arange(si, si + s[-1].shape[1]).reshape(1, -1))
-            timesteps[-1][timesteps[-1] >= self.train_configs.episode_length] = self.train_configs.episode_length - 1  # padding cutoff
+            timesteps[-1][timesteps[-1] >= self.train_configs.episode_length] = self.train_configs.episode_length - 1
             rtg.append(traj['rtg'][si:si + self.context_size].reshape(1, -1, 1))
 
             # padding and state + reward normalization
@@ -125,40 +129,36 @@ class Trainer:
             timesteps[-1] = np.concatenate([np.zeros((1, self.context_size - tlen)), timesteps[-1]], axis=1)
             mask.append(np.concatenate([np.zeros((1, self.context_size - tlen)), np.ones((1, tlen))], axis=1))
 
-        s = torch.from_numpy(np.concatenate(s, axis=0)).to(
-            dtype=torch.float32, device=device)
-        a = torch.from_numpy(np.concatenate(a, axis=0)).to(
-            dtype=torch.float32, device=device)
-        adv_a = torch.from_numpy(np.concatenate(adv_a, axis=0)).to(
-            dtype=torch.float32, device=device)
-        r = torch.from_numpy(np.concatenate(r, axis=0)).to(
-            dtype=torch.float32, device=device)
-        d = torch.from_numpy(np.concatenate(d, axis=0)).to(
-            dtype=torch.long, device=device)
-        rtg = torch.from_numpy(np.concatenate(rtg, axis=0)).to(
-            dtype=torch.float32, device=device)
-        timesteps = torch.from_numpy(np.concatenate(timesteps, axis=0)).to(
-            dtype=torch.long, device=device)
+        s = torch.from_numpy(np.concatenate(s, axis=0)).to(dtype=torch.float32, device=device)
+        a = torch.from_numpy(np.concatenate(a, axis=0)).to(dtype=torch.float32, device=device)
+        adv_a = torch.from_numpy(np.concatenate(adv_a, axis=0)).to(dtype=torch.float32, device=device)
+        r = torch.from_numpy(np.concatenate(r, axis=0)).to(dtype=torch.float32, device=device)
+        d = torch.from_numpy(np.concatenate(d, axis=0)).to(dtype=torch.long, device=device)
+        rtg = torch.from_numpy(np.concatenate(rtg, axis=0)).to(dtype=torch.float32, device=device)
+        timesteps = torch.from_numpy(np.concatenate(timesteps, axis=0)).to(dtype=torch.long, device=device)
         mask = torch.from_numpy(np.concatenate(mask, axis=0)).to(device=device)
-
         if self.with_adv_action:
             return s, a, adv_a, r, d, rtg, timesteps, mask
         else:
             return s, a, r, d, rtg, timesteps, mask
 
     def train_iteration(self, num_steps, iter_num=0, device="cpu", print_logs=False):
+        # train model
         train_losses = []
         logs = dict()
         train_start = time.time()
         self.model.train()
         for _ in tqdm(range(num_steps)):
-            train_loss = self.train_step(device)
+            train_loss = self.train_step()
             train_losses.append(train_loss)
             if self.scheduler is not None:
                 self.scheduler.step()
 
         logs['time/training'] = time.time() - train_start
+        logs['training/train_loss_mean'] = np.mean(train_losses)
+        logs['training/train_loss_std'] = np.std(train_losses)
 
+        # evaluate model
         eval_start = time.time()
         self.model.eval()
         for eval_fn in self.eval_fns:
@@ -166,11 +166,10 @@ class Trainer:
             for k, v in outputs.items():
                 logs[f'evaluation/{k}'] = v
 
-        logs['time/total'] = time.time() - self.start_time
         logs['time/evaluation'] = time.time() - eval_start
-        logs['training/train_loss_mean'] = np.mean(train_losses)
-        logs['training/train_loss_std'] = np.std(train_losses)
+        logs['time/total'] = time.time() - train_start
 
+        # log diagonistics metrics
         for k in self.diagnostics:
             logs[k] = self.diagnostics[k]
 
@@ -181,24 +180,3 @@ class Trainer:
                 print(f'{k}: {v}')
 
         return logs
-
-    def train_step(self, device: str = "cpu"):
-        states, actions, rewards, dones, attention_mask, returns = self.get_batch(device)
-        state_target, action_target, reward_target = torch.clone(states), torch.clone(actions), torch.clone(rewards)
-
-        state_preds, action_preds, reward_preds = self.model.forward(
-            states, actions, rewards, masks=None, attention_mask=attention_mask, target_return=returns,
-        )
-
-        loss = self.loss_fn(
-            state_preds, 
-            action_preds, 
-            reward_preds,
-            state_target[:,1:], 
-            action_target, reward_target[:,1:]
-        )
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.detach().cpu().item()
