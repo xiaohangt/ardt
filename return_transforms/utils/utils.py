@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 from data_loading.load_mujoco import Trajectory
-from models.esper.cluster_model import ClusterModel
 
 
 def get_past_indices(x: torch.Tensor, seq_len: int) -> torch.Tensor:
@@ -59,14 +58,14 @@ def return_labels(traj: Trajectory, gamma: float = 1.0, new_rewards: bool = Fals
 
 
 def learned_labels(
-        traj: Trajectory, label_model: ClusterModel, n_actions: int, horizon: int, device: str, act_type: str
+        traj: Trajectory, label_model: torch.nn.Module, n_actions: int, horizon: int, device: str, act_type: str
     ) -> np.ndarray:
     """
     Compute the learned labels for a trajectory.
 
     Args:
         traj: Trajectory object
-        label_model: ClusterModel object
+        label_model: torch.nn.Module object
         n_actions: Number of actions
         horizon: Horizon of the model
         device: Device to run the model on
