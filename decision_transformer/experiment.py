@@ -34,19 +34,15 @@ def experiment(
 
     # admin
     pm = PreemptionManager(variant['checkpoint_dir'], checkpoint_every=600)
+    device = variant['device']
 
-    device = variant.get('device', 'cpu')
-    log_to_wandb = variant.get('log_to_wandb', False)
-
+    # environment and model types
     env_name = variant['env_name']
     model_type = variant['model_type']
-
     if model_type == 'bc':
         # since BC ignores target, no need for different evaluations
         env_targets = env_targets[:1]
-    
-    rtg_path = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
-    
+        
     # dimensionality
     state_dim = np.prod(env.observation_space.shape)
     if action_type == 'discrete':
@@ -90,18 +86,22 @@ def experiment(
         
         trajectories.append(traj_dict)
 
+    # some logging
     print('=' * 50)
     print(f'Starting new experiment: {env_name}')
     print(f'{len(traj_lens)} trajectories, {num_timesteps} timesteps found')
     print(f'Average return: {np.mean(returns):.2f}, std: {np.std(returns):.2f}')
     print(f'Max return: {np.max(returns):.2f}, min: {np.min(returns):.2f}')
+
     print('=' * 50)
-    pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{rtg_path}.pkl', 'wb'))
-    print(f"offline_data/data_profile_{rtg_path}.pkl")
+    returns_filename = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
+    pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{returns_filename}.pkl', 'wb'))
+    print(f"offline_data/data_profile_{returns_filename}.pkl")
 
     # set up training
     # save all path information into separate lists
     states, traj_lens, returns = [], [], []
+
     for path in trajectories:
         # pre-compute the return-to-gos
         path['rtg'] = _discount_cumsum(path['rewards'], gamma=1.)
@@ -112,6 +112,7 @@ def experiment(
             states.append(path['observations'])
         traj_lens.append(len(path['observations']))
         returns.append(path['rewards'].sum())
+
     traj_lens, returns = np.array(traj_lens), np.array(returns)
 
     # used for input normalization
@@ -126,10 +127,12 @@ def experiment(
     num_trajectories = 1
     timesteps = traj_lens[sorted_inds[-1]]
     ind = len(trajectories) - 2
+
     while ind >= 0 and timesteps + traj_lens[sorted_inds[ind]] <= num_timesteps:
         timesteps += traj_lens[sorted_inds[ind]]
         num_trajectories += 1
         ind -= 1
+
     sorted_inds = sorted_inds[-num_trajectories:]
 
     # used to generate evaluation functions to be fed into different training runs
@@ -285,7 +288,7 @@ def experiment(
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
 
-    # Load learned returns-to-go
+    # load learned returns-to-go
     if variant['algo'] in ['radt', 'esper']:
         assert variant['ret_file']
         with open(variant['ret_file'], 'rb') as f:
@@ -293,9 +296,10 @@ def experiment(
         for i, path in enumerate(trajectories):
             path['rtg'] = rtg_dict[i]
 
-    # Train
+    # train the model on learned targets
     completed_iters = pm.load_if_exists('completed_iters', 0)
     print("Trained for iterations:", completed_iters)
+
     for iter in range(completed_iters, variant['train_iters']):
         outputs = trainer.train_iteration(
             num_steps=variant['num_steps_per_iter'], 
@@ -307,12 +311,12 @@ def experiment(
         pm.save('scheduler', scheduler.state_dict())
         pm.save('model', model.state_dict())
         pm.checkpoint()
-        if log_to_wandb:
+        if variant.get('log_to_wandb', False):
             wandb.log(outputs)
         completed_iters += 1
         pm.save('completed_iters', completed_iters)
         
-    # Evaluate
+    # evaluate trained model
     if not variant['is_training_only']:
         for tgt in env_targets:
             eval_fn = eval_fn_generator.generate_eval_fn(tgt)
