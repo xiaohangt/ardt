@@ -37,6 +37,7 @@ class Trainer:
     def __init__(
             self,
             model: torch.nn.Module, 
+            model_type: str,
             optimizer: torch.optim.optimizer,
             scheduler: torch.optim.lr_scheduler,
             gradients_clipper: function | None,
@@ -53,6 +54,7 @@ class Trainer:
         self.diagnostics = dict()
         # model
         self.model = model
+        self.model_type = model_type
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.gradients_clipper = gradients_clipper
@@ -162,7 +164,7 @@ class Trainer:
         eval_start = time.time()
         self.model.eval()
         for eval_fn in self.eval_fns:
-            outputs = eval_fn(self.model)
+            outputs = eval_fn(self.model, self.model_type)
             for k, v in outputs.items():
                 logs[f'evaluation/{k}'] = v
 

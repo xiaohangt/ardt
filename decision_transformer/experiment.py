@@ -1,13 +1,10 @@
 import pickle
-import random
 
-import gym
 import numpy as np
 import torch
 import wandb
-from tqdm import tqdm
 
-from decision_transformer.decision_transformer.evaluation.evaluate_episodes import evaluate, evaluate_episode
+from decision_transformer.decision_transformer.evaluation.eval_fn_generator import EvalFnGenerator
 from decision_transformer.decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.decision_transformer.models.adversarial_decision_transformer import AdversarialDecisionTransformer
 from decision_transformer.decision_transformer.models.mlp_bc import MLPBCModel
@@ -16,93 +13,6 @@ from decision_transformer.decision_transformer.training.act_trainer import ActTr
 from decision_transformer.decision_transformer.training.seq_trainer import SequenceTrainer
 from decision_transformer.decision_transformer.training.adv_seq_trainer import AdvSequenceTrainer
 from decision_transformer.decision_transformer.utils.preemption import PreemptionManager
-
-
-def eval_episodes(target_return):
-        is_argmax = variant["argmax"]
-        num_eval_episodes = 1 if variant['argmax'] else variant['num_eval_episodes']
-        def fn(model):
-            print("Start evaluating:")
-            if model_type == 'bc':
-                returns, lengths = [], []
-                for _ in tqdm(range(num_eval_episodes)):
-                    with torch.no_grad():
-                        ret, length = evaluate_episode(
-                                    env,
-                                    state_dim,
-                                    act_dim,
-                                    model,
-                                    max_ep_len=max_ep_len,
-                                    target_return=target_return/scale,
-                                    mode=variant.get('mode', 'normal'),
-                                    state_mean=state_mean,
-                                    state_std=state_std,
-                                    device=device,
-                                )
-                    returns.append(ret)
-                    lengths.append(length)
-            else:
-                returns, lengths = evaluate(
-                    target_return, 
-                    model_type, 
-                    num_eval_episodes, 
-                    task, 
-                    state_dim, 
-                    act_dim, 
-                    adv_act_dim, 
-                    model,
-                    max_ep_len, 
-                    scale, 
-                    state_mean, 
-                    state_std, 
-                    device, 
-                    action_type, 
-                    is_argmax, 
-                    variant['normalize_states'], 
-                    batch_size=None
-                )
-            
-            show_res_dict = {
-                f'target_{target_return}_return_mean': np.mean(returns),
-                f'target_{target_return}_return_std': np.std(returns),
-            }
-
-            result_dict = {
-                f'target_{target_return}_return_mean': np.mean(returns),
-                f'target_{target_return}_return_std': np.std(returns),
-                f'target_{target_return}_length_mean': np.mean(lengths),
-                f'target_{target_return}_length_std': np.std(lengths),
-            }
-
-            # dump information to that file
-            rtg_path = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
-            d_name = variant["data_name"][variant["data_name"].rfind('/') + 1:] if '/' in variant["data_name"] else variant["data_name"]
-
-            test_adv = variant["test_adv"][variant["test_adv"].rfind('/') + 1:] if '/' in variant["test_adv"] else variant["test_adv"]
-            traj_len = variant["traj_len"]
-            seed = variant['seed']
-            env_alpha = env.env_alpha if hasattr(env, 'env_alpha') else None
-            
-            if variant['algo'] != 'dt':
-                save_path = f'results/{rtg_path}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_return}_{seed}.pkl'
-            else:
-                added_data_name = variant['added_data_name']
-                added_data_prop = variant['added_data_prop']
-                algo = variant['algo']
-                save_path = f'results/{algo}_original_{d_name}_{added_data_name}_{added_data_prop}_traj{traj_len}_model{model_type}_adv{test_adv}_alpha{env_alpha}_{is_argmax}_{target_return}_{seed}.pkl'
-                
-            pickle.dump(result_dict, open(save_path, 'wb'))
-            print("Evaluation results", show_res_dict, "saved to ", save_path)
-            return show_res_dict
-        return fn
-
-
-def _discount_cumsum(x, gamma):
-    discount_cumsum = np.zeros_like(x)
-    discount_cumsum[-1] = x[-1]
-    for t in reversed(range(x.shape[0] - 1)):
-        discount_cumsum[t] = x[t] + gamma * discount_cumsum[t+1]
-    return discount_cumsum
 
 
 def experiment(
@@ -114,6 +24,14 @@ def experiment(
         action_type,
         variant
     ):
+
+    def _discount_cumsum(x, gamma):
+        discount_cumsum = np.zeros_like(x)
+        discount_cumsum[-1] = x[-1]
+        for t in reversed(range(x.shape[0] - 1)):
+            discount_cumsum[t] = x[t] + gamma * discount_cumsum[t+1]
+        return discount_cumsum
+
     # admin
     pm = PreemptionManager(variant['checkpoint_dir'], checkpoint_every=600)
 
@@ -214,8 +132,28 @@ def experiment(
         ind -= 1
     sorted_inds = sorted_inds[-num_trajectories:]
 
-    # used to reweight sampling so we sample according to timesteps instead of trajectories
-    p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+    # used to generate evaluation functions to be fed into different training runs
+    eval_fn_generator = EvalFnGenerator(
+        variant.get('seed', 0),
+        task,
+        env_name,
+        (1 if variant['argmax'] else variant['num_eval_episodes']),
+        state_dim, 
+        act_dim, 
+        adv_act_dim,
+        action_type,
+        max_ep_len,
+        scale, 
+        state_mean, 
+        state_std,
+        variant['batch_size'], 
+        variant['normalize_states'],
+        variant['ret_file'],
+        variant['data_name'],
+        variant['test_adv'],
+        variant['added_data_name'],
+        variant['added_data_prop']
+    )
 
     # now gather train configs
     train_configs = TrainConfigs(
@@ -305,6 +243,7 @@ def experiment(
     if model_type == 'dt':
         trainer = SequenceTrainer(
             model=model,
+            model_type=model_type,
             optimizer=optimizer,
             scheduler=scheduler,
             gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm']))
@@ -315,11 +254,12 @@ def experiment(
             trajectories_sorted_idx=sorted_inds,
             trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
-            eval_fns=[eval_episodes(tar) for tar in env_targets],
+            eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
     elif model_type == 'adt':
         trainer = AdvSequenceTrainer(
             model=model,
+            model_type=model_type,
             optimizer=optimizer,
             scheduler=scheduler,
             gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm'])),
@@ -328,11 +268,12 @@ def experiment(
             env_name=env_name,
             trajectories=trajectories,
             train_configs=train_configs,
-            eval_fns=[eval_episodes(tar) for tar in env_targets],
+            eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
     elif model_type == 'bc':
         trainer = ActTrainer(
             model=model,
+            model_type=model_type,
             optimizer=optimizer,
             scheduler=scheduler,
             gradients_clipper=None,
@@ -341,7 +282,7 @@ def experiment(
             env_name=env_name,
             trajectories=trajectories,
             train_configs=train_configs,
-            eval_fns=[eval_episodes(tar) for tar in env_targets],
+            eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
 
     # Load learned returns-to-go
@@ -373,6 +314,6 @@ def experiment(
         
     # Evaluate
     if not variant['is_training_only']:
-        for tar in env_targets:
-            eval_func = eval_episodes(tar)
-            print(tar, eval_func(model))
+        for tgt in env_targets:
+            eval_fn = eval_fn_generator.generate_eval_fn(tgt)
+            print(tgt, eval_fn(model, model_type))
