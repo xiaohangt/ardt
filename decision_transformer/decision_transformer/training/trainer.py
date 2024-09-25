@@ -19,6 +19,7 @@ class TrainConfigs:
         returns_scale: int,
         top_pct_traj: float,
         episode_length: int,
+        batch_size: int = 1,
         normalize_states: bool = True,
     ):
         self.action_dim = action_dim
@@ -30,6 +31,7 @@ class TrainConfigs:
         self.returns_scale = returns_scale
         self.top_pct_traj = top_pct_traj
         self.episode_length = episode_length
+        self.batch_size = batch_size
         self.normalize_states = normalize_states
 
 
@@ -38,17 +40,17 @@ class Trainer:
             self,
             model: torch.nn.Module, 
             model_type: str,
-            optimizer: torch.optim.optimizer,
+            optimizer: torch.optim.Optimizer,
             scheduler: torch.optim.lr_scheduler,
-            gradients_clipper: function | None,
+            gradients_clipper: callable,
             context_size: int,
             with_adv_action: bool,
             env_name: str,
             trajectories: list[Trajectory],
-            trajectories_sorted_idx: np.array[int],
-            trajectories_sorted_probs: np.array[float],
+            trajectories_sorted_idx: np.array,
+            trajectories_sorted_probs: np.array,
             train_configs: TrainConfigs,
-            eval_fns: list[function]
+            eval_fns: list[callable]
         ):
         self.start_time = time.time()
         self.diagnostics = dict()
@@ -63,7 +65,7 @@ class Trainer:
         # data
         self.env_name = env_name
         self.trajectories = trajectories
-        self.trajectories_sorted_idx = trajectories_sorted_idx,
+        self.trajectories_sorted_idx = trajectories_sorted_idx
         self.trajectories_sorted_probs = trajectories_sorted_probs
         # training
         self.train_configs = train_configs
@@ -85,7 +87,7 @@ class Trainer:
         # reweights so we sample according to timesteps
         batch_idx = np.random.choice(
             np.arange(len(self.trajectories)),
-            size=self.batch_size,
+            size=self.train_configs.batch_size,
             p=self.trajectories_sorted_probs,
             replace=True,
         )
@@ -93,9 +95,10 @@ class Trainer:
         # process
         s, a, adv_a, r, d, rtg, timesteps, mask = [], [], [], [], [], [], [], []
         
-        for i in range(self.batch_size):
+        for i in range(self.train_configs.batch_size):
             # selecting trajectories and start point
             traj = self.trajectories[int(self.trajectories_sorted_idx[batch_idx[i]])]
+
             if self.env_name not in ["halfcheetah", "hopper", "walker2d"]:
                 si = 0
             else:
@@ -107,8 +110,8 @@ class Trainer:
             else:
                 cur_state = traj['observations']
             s.append(cur_state[si:si + self.context_size].reshape(1, -1, self.train_configs.state_dim))
-            a.append(traj['actions'][si:si + self.context_size].reshape(1, -1, self.train_configs.act_dim))
-            adv_a.append(traj['adv_actions'][si:si + self.context_size].reshape(1, -1, self.train_configs.adv_act_dim))
+            a.append(traj['actions'][si:si + self.context_size].reshape(1, -1, self.train_configs.action_dim))
+            adv_a.append(traj['adv_actions'][si:si + self.context_size].reshape(1, -1, self.train_configs.adv_action_dim))
             r.append(traj['rewards'][si:si + self.context_size].reshape(1, -1, 1))
             if 'terminals' in traj:
                 d.append(traj['terminals'][si:si + self.context_size].reshape(1, -1))
@@ -123,11 +126,11 @@ class Trainer:
             s[-1] = np.concatenate([np.zeros((1, self.context_size - tlen, self.train_configs.state_dim)), s[-1]], axis=1)
             if self.train_configs.normalize_states:
                 s[-1] = (s[-1] - self.state_mean) / self.state_std
-            a[-1] = np.concatenate([np.ones((1, self.context_size - tlen, self.train_configs.act_dim)) * -10., a[-1]], axis=1)
-            adv_a[-1] = np.concatenate([np.zeros((1, self.context_size - tlen, self.train_configs.adv_act_dim)), adv_a[-1]], axis=1)
+            a[-1] = np.concatenate([np.ones((1, self.context_size - tlen, self.train_configs.action_dim)) * -10., a[-1]], axis=1)
+            adv_a[-1] = np.concatenate([np.zeros((1, self.context_size - tlen, self.train_configs.adv_action_dim)), adv_a[-1]], axis=1)
             r[-1] = np.concatenate([np.zeros((1, self.context_size -  tlen, 1)), r[-1]], axis=1)
             d[-1] = np.concatenate([np.ones((1, self.context_size - tlen)) * 2, d[-1]], axis=1)
-            rtg[-1] = np.concatenate([np.zeros((1, self.context_size - tlen, 1)),   rtg[-1]], axis=1) / self.train_configs.scale
+            rtg[-1] = np.concatenate([np.zeros((1, self.context_size - tlen, 1)),   rtg[-1]], axis=1) / self.train_configs.returns_scale
             timesteps[-1] = np.concatenate([np.zeros((1, self.context_size - tlen)), timesteps[-1]], axis=1)
             mask.append(np.concatenate([np.zeros((1, self.context_size - tlen)), np.ones((1, tlen))], axis=1))
 

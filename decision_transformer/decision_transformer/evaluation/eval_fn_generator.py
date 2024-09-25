@@ -7,12 +7,11 @@ from decision_transformer.decision_transformer.evaluation.evaluate_episodes impo
 
 
 class EvalFnGenerator:
-
     def __init__(
             self,
             seed,
-            task,
             env_name,
+            task,
             num_eval_episodes,
             state_dim, 
             act_dim, 
@@ -24,6 +23,8 @@ class EvalFnGenerator:
             state_std,
             batch_size, 
             normalize_states,
+            device,
+            algo_name,
             returns_filename,
             dataset_name,
             test_adv_name,
@@ -31,8 +32,8 @@ class EvalFnGenerator:
             added_dataset_prop
         ):
         self.seed = seed
-        self.task = task
         self.env_name = env_name
+        self.task = task
         self.num_eval_episodes = num_eval_episodes
         self.state_dim = state_dim
         self.act_dim = act_dim
@@ -45,7 +46,9 @@ class EvalFnGenerator:
         self.target_return = None
         self.batch_size = batch_size
         self.normalize_states = normalize_states
+        self.device = device
         self.storage_path = self._build_storage_path(
+            algo_name,
             returns_filename,
             dataset_name,
             test_adv_name,
@@ -55,6 +58,7 @@ class EvalFnGenerator:
 
     def _build_storage_path(
             self,
+            algo_name,
             returns_filename,
             dataset_name,
             test_adv_name,
@@ -70,28 +74,28 @@ class EvalFnGenerator:
             else test_adv_name
         )
         
-        if self.algo != 'dt':
+        if algo_name != 'dt':
             returns_filename = returns_filename[returns_filename.rfind('/') + 1:]
             dataset_name = (
                 dataset_name[dataset_name.rfind('/') + 1:] 
                 if '/' in dataset_name
                 else dataset_name
             )
-            self.storage_path = (
+            return (
                 f'results/{returns_filename}_traj{self.traj_len}_model/model_type/_adv{test_adv_name}_' +
                 f'alpha{env_alpha}_False_{self.target_return}_{self.seed}.pkl'
             )
         else:
-            self.storage_path = (
-                f'results/{self.algo}_original_{dataset_name}_{added_dataset_name}_' +
+            return (
+                f'results/{algo_name}_original_{dataset_name}_{added_dataset_name}_' +
                 f'{added_dataset_prop}_traj{self.traj_len}_model/model_type/_' + 
                 f'adv{test_adv_name}_alpha{env_alpha}_False_{self.target_return}_{self.seed}.pkl'
             )
 
     def _eval_fn(self, model: torch.nn.Module, model_type: str) -> dict:
         returns, lengths = evaluate(
-            self.task,
             self.env_name,
+            self.task,
             self.num_eval_episodes,
             self.state_dim, 
             self.act_dim, 
@@ -106,7 +110,7 @@ class EvalFnGenerator:
             self.target_return,
             batch_size=self.batch_size, 
             normalize_states=self.normalize_states,
-            device=model.device
+            device=self.device
         )
         
         show_res_dict = {

@@ -86,19 +86,6 @@ def experiment(
         
         trajectories.append(traj_dict)
 
-    # some logging
-    print('=' * 50)
-    print(f'Starting new experiment: {env_name}')
-    print(f'{len(traj_lens)} trajectories, {num_timesteps} timesteps found')
-    print(f'Average return: {np.mean(returns):.2f}, std: {np.std(returns):.2f}')
-    print(f'Max return: {np.max(returns):.2f}, min: {np.min(returns):.2f}')
-
-    print('=' * 50)
-    returns_filename = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
-    pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{returns_filename}.pkl', 'wb'))
-    print(f"offline_data/data_profile_{returns_filename}.pkl")
-
-    # set up training
     # save all path information into separate lists
     states, traj_lens, returns = [], [], []
 
@@ -134,12 +121,25 @@ def experiment(
         ind -= 1
 
     sorted_inds = sorted_inds[-num_trajectories:]
+    p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+
+    # some logging
+    print('=' * 50)
+    print(f'Starting new experiment: {env_name}')
+    print(f'{len(traj_lens)} trajectories, {num_timesteps} timesteps found')
+    print(f'Average return: {np.mean(returns):.2f}, std: {np.std(returns):.2f}')
+    print(f'Max return: {np.max(returns):.2f}, min: {np.min(returns):.2f}')
+
+    print('=' * 50)
+    returns_filename = variant['ret_file'][variant['ret_file'].rfind('/') + 1:]
+    pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{returns_filename}.pkl', 'wb'))
+    print(f"offline_data/data_profile_{returns_filename}.pkl")
 
     # used to generate evaluation functions to be fed into different training runs
     eval_fn_generator = EvalFnGenerator(
         variant.get('seed', 0),
-        task,
         env_name,
+        task,
         (1 if variant['argmax'] else variant['num_eval_episodes']),
         state_dim, 
         act_dim, 
@@ -151,6 +151,8 @@ def experiment(
         state_std,
         variant['batch_size'], 
         variant['normalize_states'],
+        device,
+        variant['algo'],
         variant['ret_file'],
         variant['data_name'],
         variant['test_adv'],
@@ -169,6 +171,7 @@ def experiment(
         returns_scale=scale,
         top_pct_traj=top_pct_traj,
         episode_length=max_ep_len,
+        batch_size=variant['batch_size'],
         normalize_states=variant['normalize_states'],
     )
 
@@ -249,7 +252,7 @@ def experiment(
             model_type=model_type,
             optimizer=optimizer,
             scheduler=scheduler,
-            gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm']))
+            gradients_clipper=(lambda x: torch.nn.utils.clip_grad_norm_(x, variant['grad_clip_norm'])),
             context_size=variant['K'],
             with_adv_action=False,
             env_name=env_name,
@@ -270,6 +273,8 @@ def experiment(
             with_adv_action=True,
             env_name=env_name,
             trajectories=trajectories,
+            trajectories_sorted_idx=sorted_inds,
+            trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
@@ -284,6 +289,8 @@ def experiment(
             with_adv_action=False,
             env_name=env_name,
             trajectories=trajectories,
+            trajectories_sorted_idx=sorted_inds,
+            trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )

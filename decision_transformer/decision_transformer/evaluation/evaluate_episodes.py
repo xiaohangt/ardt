@@ -216,8 +216,8 @@ def evaluate_episode(
 
 
 def evaluate(
-        task, 
         env_name,
+        task, 
         num_eval_episodes,
         state_dim, 
         act_dim, 
