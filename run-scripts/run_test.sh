@@ -104,7 +104,7 @@ num_eval_episodes=$8    # number of evaluation episodes, default 100
 #         --K 20 \
 #         --model_type $model_type \
 #         --train_iters 2 \
-#         --num_steps_per_iter 100 \
+#         --num_steps_per_iter 5 \
 #         --test_adv $adv \
 #         --env_alpha $env_alpha \
 #         --num_eval_episodes 0
