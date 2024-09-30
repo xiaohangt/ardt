@@ -23,7 +23,7 @@ def worst_case_env_step(
     _, reward, terminated, truncated, _ = env.step(action)
     done = terminated or truncated
     
-    if env_name == "GamblingEnv":
+    if env_name == "gambling":
         if timestep == 0:
             if action == 0:
                 w_reward = -15 
@@ -34,7 +34,7 @@ def worst_case_env_step(
         elif timestep == 1:
             reward = w_reward
             assert done
-    elif env_name == "ToyEnv":
+    elif env_name == "toy":
         if timestep == 0:
             if action == 0:
                 env.w_reward = 0
@@ -43,7 +43,7 @@ def worst_case_env_step(
         else:
             reward = env.w_reward
             assert done
-    elif env_name == "MSToyEnv":
+    elif env_name == "mstoy":
         done = False
         if timestep == 0:
             if action > 0:
@@ -56,7 +56,7 @@ def worst_case_env_step(
         else:
             reward = env.reward_list[action + (state.argmax() - 1) * 3]
             done = True
-    elif env_name == "NewMSToyEnv":
+    elif env_name == "new_mstoy":
         done = False
         if timestep == 0:
             if action > 0:
@@ -172,10 +172,10 @@ def evaluate_episode(
 
         if (
             worst_case and 
-            env_name in ["GamblingEnv", "ToyEnv", "MSToyEnv", "NewMSToyEnv"]
+            env_name in ["gambling", "toy", "mstoy"]
         ):
             state, reward, terminated, truncated, infos = worst_case_env_step(
-                state, action, t, env, env_name
+                state, action, t, env_name, env
             )
         else:
             state, reward, terminated, truncated, infos = env.step(action)
@@ -235,13 +235,13 @@ def evaluate(
         device='cpu'
     ):
     test_env = task.test_env_cls()
-    if env_name == "ConnectFourEnv":
+    if env_name == "connect_four":
         test_env = GridWrapper(test_env) 
 
     returns, lengths = [], []
     for _ in tqdm(range(num_eval_episodes)):
         with torch.no_grad():
-            ret, length, _, _ = evaluate_episode(
+            ret, length = evaluate_episode(
                 test_env,
                 env_name,
                 state_dim,
