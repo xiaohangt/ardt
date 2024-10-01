@@ -37,9 +37,9 @@ class ClusterModel(torch.nn.Module):
             self.hidden_size, rep_size, **model_args['logit_model']
         )
         self.ret_obs_act_model_args = MLP(
-            obs_size + action_size, self.hidden_size, **model_args['ret_obs_act_model_args']
+            obs_size + action_size, self.hidden_size, **model_args['ret_obs_action_model']
         )
-        self.ret_model_args = MLP(rep_size + self.hidden_size, 1, **model_args['ret_model_args'])
+        self.ret_model_args = MLP(rep_size + self.hidden_size, 1, **model_args['return_model'])
         self.action_model = MLP(rep_size + obs_size, action_size, **model_args['action_model'])
 
     def forward(self, obs, action, seq_len, hidden=None, hard=False):

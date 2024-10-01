@@ -17,18 +17,18 @@ def get_past_indices(x: torch.Tensor, seq_len: int) -> torch.Tensor:
         torch.Tensor: A tensor of shape (batch_size, T) containing valid indices.
     """
     batch_size = x.size(0)
-    seq_len = x.size(1)
-    idxs = torch.randint(0, seq_len, (batch_size, seq_len), device=x.device)
-    steps = torch.arange(0, seq_len, device=x.device).view(1, seq_len).expand(batch_size, seq_len)
+    obs_seq_len = x.size(1)
+    idxs = torch.randint(0, seq_len, (batch_size, obs_seq_len), device=x.device)
+    steps = torch.arange(0, seq_len, device=x.device).view(1, obs_seq_len).expand(batch_size, obs_seq_len)
 
     # Assumes uniform padding length for all sequences in a batch
     # and shifts steps by padding lengths to start from non-padded positions
-    pad_lens = seq_len - seq_len
-    steps = steps - pad_lens.unsqueeze(1) + 1
+    pad_lens = obs_seq_len - seq_len
+    steps = steps - pad_lens + 1
 
     # Ensure indices are within valid range and adjust back by padding lengths
     idxs = torch.where(steps == 0, torch.zeros_like(idxs), idxs % steps)
-    return (idxs + pad_lens.unsqueeze(1)).long()
+    return (idxs + pad_lens).long()
 
 
 def return_labels(traj: Trajectory, gamma: float = 1.0, new_rewards: bool = False) -> list:

@@ -5,6 +5,9 @@ from typing import Any
 
 
 class CheckpointTimer:
+	"""
+	Timer to keep track of when to checkpoint
+	"""
 	def __init__(self, checkpoint_every: int):
 		self.checkpoint_every = checkpoint_every
 		self.last_checkpoint = 0
@@ -17,6 +20,9 @@ class CheckpointTimer:
 
 
 class PreemptionManager:
+	"""
+	Manager to handle preemption in the training loop.
+	"""
 	def __init__(
 			self, 
 			checkpoint_dir: str, 

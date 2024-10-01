@@ -1,3 +1,4 @@
+import gym
 import pickle
 
 import numpy as np
@@ -13,17 +14,30 @@ from decision_transformer.decision_transformer.training.act_trainer import ActTr
 from decision_transformer.decision_transformer.training.seq_trainer import SequenceTrainer
 from decision_transformer.decision_transformer.training.adv_seq_trainer import AdvSequenceTrainer
 from decision_transformer.decision_transformer.utils.preemption import PreemptionManager
+from stochastic_offline_envs.stochastic_offline_envs.envs.offline_envs.base import BaseOfflineEnv
 
 
 def experiment(
-        task,
-        env,
-        max_ep_len,
-        env_targets,
-        scale,
-        action_type,
-        variant
+        task: BaseOfflineEnv,
+        env: gym.Env,
+        max_ep_len: int,
+        env_targets: list,
+        scale: float,
+        action_type: str,
+        variant: dict,
     ):
+    """
+    Run the experiment for the given task and environment.
+
+    Args:
+        task (BaseOfflineEnv): Task object.
+        env (gym.Env): Environment object.
+        max_ep_len (int): Maximum episode length.
+        env_targets (list): List of target environments.
+        scale (float): Scaling factor for the states.
+        action_type (str): Type of action space.
+        variant (dict): Dictionary containing the experiment configuration.
+    """
 
     def _discount_cumsum(x, gamma):
         discount_cumsum = np.zeros_like(x)
@@ -32,18 +46,18 @@ def experiment(
             discount_cumsum[t] = x[t] + gamma * discount_cumsum[t+1]
         return discount_cumsum
 
-    # admin
+    # Admin
     pm = PreemptionManager(variant['checkpoint_dir'], checkpoint_every=600)
     device = variant['device']
 
-    # environment and model types
+    # Environment and model types
     env_name = variant['env_name']
     model_type = variant['model_type']
     if model_type == 'bc':
         # since BC ignores target, no need for different evaluations
         env_targets = env_targets[:1]
         
-    # dimensionality
+    # Dimensionality
     state_dim = np.prod(env.observation_space.shape)
     if action_type == 'discrete':
         act_dim = env.action_space.n
@@ -52,7 +66,7 @@ def experiment(
         act_dim = env.action_space.shape[0]
         adv_act_dim = env.adv_action_space.shape[0]
 
-    # load dataset
+    # Load dataset
     raw_trajectories = task.trajs
     trajectories = []
 
@@ -86,11 +100,10 @@ def experiment(
         
         trajectories.append(traj_dict)
 
-    # save all path information into separate lists
+    # Save all path information into separate lists and pre-compute returns
     states, traj_lens, returns = [], [], []
 
     for path in trajectories:
-        # pre-compute the return-to-gos
         path['rtg'] = _discount_cumsum(path['rewards'], gamma=1.)
         if env_name == "connect_four":
             cur_state = np.array([obs for obs in path['observations']])
@@ -102,12 +115,12 @@ def experiment(
 
     traj_lens, returns = np.array(traj_lens), np.array(returns)
 
-    # used for input normalization
+    # Used for input normalisation
     states = np.concatenate(states, axis=0)
     state_mean, state_std = np.mean(states, axis=0), np.std(states, axis=0) + 1e-6
     num_timesteps = sum(traj_lens)
 
-    # only train on top top_pct_traj trajectories (for %BC experiment)
+    # Only train on top top_pct_traj trajectories (for %BC experiment)
     top_pct_traj = variant.get('top_pct_traj', 1.)
     num_timesteps = max(int(top_pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)
@@ -123,7 +136,7 @@ def experiment(
     sorted_inds = sorted_inds[-num_trajectories:]
     p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
 
-    # some logging
+    # Some logging
     print('=' * 50)
     print(f'Starting new experiment: {env_name}')
     print(f'{len(traj_lens)} trajectories, {num_timesteps} timesteps found')
@@ -135,7 +148,7 @@ def experiment(
     pickle.dump([np.mean(returns), np.std(returns)], open(f'offline_data/data_profile_{returns_filename}.pkl', 'wb'))
     print(f"offline_data/data_profile_{returns_filename}.pkl")
 
-    # used to generate evaluation functions to be fed into different training runs
+    # Used to generate evaluation functions to be fed into different training runs
     eval_fn_generator = EvalFnGenerator(
         variant.get('seed', 0),
         env_name,
@@ -160,7 +173,7 @@ def experiment(
         variant['added_data_prop']
     )
 
-    # now gather train configs
+    # Now gather train configs
     train_configs = TrainConfigs(
         action_dim=act_dim,
         adv_action_dim=adv_act_dim,
@@ -175,7 +188,7 @@ def experiment(
         normalize_states=variant['normalize_states'],
     )
 
-    # set up model
+    # Set up model
     if model_type == 'dt':
         model = pm.load_torch(
             'model', 
@@ -245,7 +258,7 @@ def experiment(
         lambda steps: min((steps + 1) / variant['warmup_steps'], 1)
     )
 
-    # build trainer
+    # Build trainer
     if model_type == 'dt':
         trainer = SequenceTrainer(
             model=model,
@@ -295,15 +308,15 @@ def experiment(
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
 
-    # load learned returns-to-go
+    # Load learned returns-to-go
     if variant['algo'] in ['radt', 'esper']:
         assert variant['ret_file']
-        with open(variant['ret_file'], 'rb') as f:
+        with open(f"{variant['ret_file']}.pkl", 'rb') as f:
             rtg_dict = pickle.load(f)
         for i, path in enumerate(trajectories):
             path['rtg'] = rtg_dict[i]
 
-    # train the model on learned targets
+    # Train the model on learned targets
     completed_iters = pm.load_if_exists('completed_iters', 0)
     print("Trained for iterations:", completed_iters)
 
@@ -323,7 +336,7 @@ def experiment(
         completed_iters += 1
         pm.save('completed_iters', completed_iters)
         
-    # evaluate trained model
+    # Evaluate trained model
     if not variant['is_training_only']:
         for tgt in env_targets:
             eval_fn = eval_fn_generator.generate_eval_fn(tgt)

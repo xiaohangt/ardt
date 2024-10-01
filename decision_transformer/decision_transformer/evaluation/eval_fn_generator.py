@@ -4,32 +4,59 @@ import numpy as np
 import torch
 
 from decision_transformer.decision_transformer.evaluation.evaluate_episodes import evaluate
+from stochastic_offline_envs.stochastic_offline_envs.envs.offline_envs.base import BaseOfflineEnv
 
 
 class EvalFnGenerator:
+    """
+    Class to generate evaluation functions for a given model and model type.
+
+    Args:
+        seed (int): Seed for reproducibility.
+        env_name (str): Name of the environment.
+        task (BaseOfflineEnv): Task object.
+        num_eval_episodes (int): Number of episodes to evaluate.
+        state_dim (int): Dimension of the state space.
+        act_dim (int): Dimension of the action space.
+        adv_act_dim (int): Dimension of the adversary action space.
+        action_type (str): Type of action space.
+        traj_len (int): Length of the trajectory.
+        scale (bool): Whether to scale the states.
+        state_mean (np.ndarray): Mean of the states.
+        state_std (np.ndarray): Standard deviation of the states.
+        batch_size (int): Batch size for evaluation.
+        normalize_states (bool): Whether to normalize the states.
+        device (torch.device): Device to run the evaluation on.
+        algo_name (str): Name of the algorithm.
+        returns_filename (str): Name of the returns file.
+        dataset_name (str): Name of the dataset.
+        test_adv_name (str): Name of the adversary.
+        added_dataset_name (str): Name of the added dataset.
+        added_dataset_prop (float): Proportion of the added dataset.
+    """
     def __init__(
             self,
-            seed,
-            env_name,
-            task,
-            num_eval_episodes,
-            state_dim, 
-            act_dim, 
-            adv_act_dim,
-            action_type,
-            traj_len,
-            scale, 
-            state_mean, 
-            state_std,
-            batch_size, 
-            normalize_states,
-            device,
-            algo_name,
-            returns_filename,
-            dataset_name,
-            test_adv_name,
-            added_dataset_name,
-            added_dataset_prop
+            seed: int,
+            env_name: str,
+            task: BaseOfflineEnv,
+            num_eval_episodes: int,
+            state_dim: int,
+            act_dim: int,
+            adv_act_dim: int,
+            action_type: str,
+            traj_len: int,
+            scale: float,
+            state_mean: float,
+            state_std: float,
+            batch_size: int,
+            normalize_states: bool,
+            device: torch.device,
+            algo_name: str,
+            returns_filename: str,
+            dataset_name: str,
+            test_adv_name: str,
+            added_dataset_name: str,
+            added_dataset_prop: float
         ):
         self.seed = seed
         self.env_name = env_name
@@ -58,13 +85,13 @@ class EvalFnGenerator:
 
     def _build_storage_path(
             self,
-            algo_name,
-            returns_filename,
-            dataset_name,
-            test_adv_name,
-            added_dataset_name,
-            added_dataset_prop
-        ):
+            algo_name: str,
+            returns_filename: str,
+            dataset_name: str,
+            test_adv_name: str,
+            added_dataset_name: str,
+            added_dataset_prop: float
+        ) -> str:
         env = self.task.test_env_cls()
         env_alpha = env.env_alpha if hasattr(env, 'env_alpha') else None
 
@@ -125,7 +152,6 @@ class EvalFnGenerator:
             f'target_{self.target_return}_length_std': np.std(lengths),
         }
 
-        # dump information to that file
         run_storage_path = self.storage_path.replace("/model_type/", model_type)          
         pickle.dump(result_dict, open(run_storage_path, 'wb'))
         print("Evaluation results", show_res_dict, "saved to ", run_storage_path)

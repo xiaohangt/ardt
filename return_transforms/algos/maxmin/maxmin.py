@@ -14,15 +14,33 @@ def _expectile_fn(
         acts_mask: torch.Tensor, 
         alpha: float = 0.01, 
         discount_weighted: bool = False
-    ):
-    batch_loss = torch.abs(alpha - F.normalize(F.relu(td_error), dim=-1)) 
+    ) -> torch.Tensor:
+    """
+    Expectile loss function to focus on different quantiles of the TD-error distribution.
+
+    Args:
+        td_error (torch.Tensor): Temporal difference error.
+        acts_mask (torch.Tensor): Mask for invalid actions.
+        alpha (float, optional): Expectile quantile parameter (default is 0.01).
+        discount_weighted (bool, optional): If True, apply discount weighting.
+
+    Returns:
+        torch.Tensor: Computed expectile loss.
+    """
+    # Normalize and apply ReLU to the TD-error
+    batch_loss = torch.abs(alpha - F.normalize(F.relu(td_error), dim=-1))
+    
+    # Square the TD-error
     batch_loss *= (td_error ** 2)
+
+    # Apply discount weighting if needed
     if discount_weighted:
         weights = 0.5 ** np.array(range(len(batch_loss)))[::-1]
         return (
             batch_loss[~acts_mask] * torch.from_numpy(weights).to(td_error.device)
         ).mean()
     else:
+        # Calculate expectile loss for valid actions
         return (batch_loss.squeeze(-1) * ~acts_mask).mean()
     
 
@@ -36,7 +54,24 @@ def maxmin(
         is_simple_model: bool = False,
         is_toy: bool = False,
         is_discretize: bool = False,
-    ):
+    ) -> tuple[np.ndarray, float]:
+    """
+    Train a max-min adversarial reinforcement learning model to handle worst-case returns.
+
+    Args:
+        trajs (list[Trajectory]): List of trajectories.
+        action_space (gym.spaces.Space): The action space of the environment.
+        adv_action_space (gym.spaces.Space): Adversarial action space.
+        train_args (dict): Training arguments including epochs, learning rates, and batch size.
+        device (str): Device to run computations on ('cpu' or 'cuda').
+        n_cpu (int): Number of CPUs to use for data loading.
+        is_simple_model (bool, optional): Use a simpler model for testing (default is False).
+        is_toy (bool, optional): Whether the environment is a toy model (default is False).
+        is_discretize (bool, optional): Whether to discretize actions for certain environments (default is False).
+
+    Returns:
+        tuple: Learned return labels and highest returns-to-go (prompt value).
+    """
     # Initialize state and action spaces
     if isinstance(action_space, gym.spaces.Discrete):
         obs_size = np.prod(trajs[0].obs[0].shape)
@@ -49,7 +84,7 @@ def maxmin(
         adv_action_size = adv_action_space.shape[0]
         action_type = 'continuous'
 
-    # Build dataset and dataloader
+    # Build dataset and dataloader for training
     max_len = max([len(traj.obs) for traj in trajs]) + 1
     dataset = ARDTDataset(
         trajs, 
@@ -63,7 +98,7 @@ def maxmin(
         dataset, batch_size=train_args['batch_size'], num_workers=n_cpu
     )
 
-    # Set up the models
+    # Set up the models (MLP or LSTM-based) involved in the ARDT algorithm
     print(f'Creating models... (simple={is_simple_model})')
     if is_simple_model:
         qsa_pr_model = RtgFFN(obs_size, action_size, include_adv=False).to(device)
@@ -79,7 +114,7 @@ def maxmin(
         qsa_adv_model.parameters(), lr=train_args['model_lr'], weight_decay=train_args['model_wd']
     )
 
-    # Start training
+    # Start training and running the ARDT algorithm
     mse_epochs = train_args['mse_epochs']
     maxmin_epochs = train_args['maxmin_epochs'] 
     total_epochs = mse_epochs + maxmin_epochs
@@ -125,7 +160,7 @@ def maxmin(
 
             # Calculate the losses at the different tages
             if epoch < mse_epochs:
-                # MSE to learn general loss landscape
+                # MSE-based learning stage to learn general loss landscape
                 ret_pr_pred = qsa_pr_model(obs, acts).view(batch_size, seq_len)
                 ret_pr_loss = (((ret_pr_pred - ret) ** 2) * ~acts_mask).mean()
                 ret_adv_pred = qsa_adv_model(obs, acts, adv_acts).view(batch_size, seq_len)
@@ -135,7 +170,7 @@ def maxmin(
                 qsa_pr_optimizer.step()
                 ret_adv_loss.backward()
                 qsa_adv_optimizer.step()
-                # Update
+                # Update losses
                 total_loss += ret_pr_loss.item() + ret_adv_loss.item()
                 total_pr_loss += ret_pr_loss.item()
                 total_adv_loss += ret_adv_loss.item()
@@ -147,7 +182,7 @@ def maxmin(
                 # Backpropagate
                 ret_pr_loss.backward()
                 qsa_pr_optimizer.step()
-                # Update 
+                # Update losses
                 total_loss += ret_pr_loss.item()
                 total_pr_loss += ret_pr_loss.item()
             else:
@@ -167,18 +202,22 @@ def maxmin(
                 # Backpropagate
                 ret_adv_loss.backward()
                 qsa_adv_optimizer.step()
-                # Update
+                # Update losses
                 total_loss += ret_adv_loss.item()
                 total_adv_loss += ret_adv_loss.item()
 
             pbar.set_description(
-                f"Epoch {epoch} | Total Loss: {total_loss / total_batches:.4f} | Pr Loss: {total_pr_loss / total_batches:.4f} | Adv Loss: {total_adv_loss / total_batches:.4f}"
+                f"Epoch {epoch} | "
+                f"Total Loss: {total_loss / total_batches:.4f} | "
+                f"Pr Loss: {total_pr_loss / total_batches:.4f} | "
+                f"Adv Loss: {total_adv_loss / total_batches:.4f}"
             )
 
     # Get the learned return labels and prompt values (i.e. highest returns-to-go)
     with torch.no_grad():
         learned_returns = []
-        prompt_value = -np.inf    
+        prompt_value = -np.inf
+
         for traj in tqdm(trajs):
             # Predict returns
             obs = torch.from_numpy(np.array(traj.obs)).float().to(device).view(1, -1, obs_size)
@@ -190,10 +229,13 @@ def maxmin(
             returns = qsa_pr_model(
                 obs.view(obs.shape[0], -1, obs_size), acts.float()
             ).cpu().flatten().numpy()
-            # Compare against previously held prompt value
+
+            # Compare against previously held prompt value, keep the highest
             if prompt_value < returns[-len(traj.actions)]:
                 prompt_value = returns[-len(traj.actions)]
-            # Update
+
+            # Update the learned returns
             learned_returns.append(np.round(returns * train_args['scale'], decimals=3))
 
+    # Return the learned returns and the scaled prompt value
     return learned_returns, np.round(prompt_value * train_args['scale'], decimals=3)

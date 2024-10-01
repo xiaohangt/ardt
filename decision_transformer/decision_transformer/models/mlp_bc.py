@@ -21,7 +21,7 @@ class MLPBCModel(torch.nn.Module):
             state_dim: int, 
             act_dim: int, 
             hidden_size: int, 
-            n_layers: int, 
+            n_layer: int, 
             dropout: float = 0.1, 
             max_length: int = 1, 
             **kwargs
@@ -37,7 +37,7 @@ class MLPBCModel(torch.nn.Module):
         layers = [torch.nn.Linear(max_length * self.state_dim, hidden_size)]
         
         # Add hidden layers with ReLU activations and dropout
-        for _ in range(n_layers - 1):
+        for _ in range(n_layer - 1):
             layers.extend([
                 torch.nn.ReLU(),
                 torch.nn.Dropout(dropout),

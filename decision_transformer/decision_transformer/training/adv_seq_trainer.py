@@ -5,6 +5,9 @@ from decision_transformer.decision_transformer.training.trainer import Trainer
 
 class AdvSequenceTrainer(Trainer):
     def train_step(self):
+        """
+        Train an Adversarial DT model for one training step.
+        """
         states, actions, adv_actions, rewards, dones, returns, timesteps, attention_mask = self.get_batch()
         action_targets = torch.clone(actions)
 

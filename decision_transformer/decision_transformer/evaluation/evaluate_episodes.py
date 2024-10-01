@@ -15,8 +15,20 @@ def worst_case_env_step(
         timestep: int,
         env_name: str, 
         env: BaseOfflineEnv
-    ):
-    # Hardcoded class for worst-case adversaries in toy environments
+    ) -> tuple[np.array, float, bool, bool, dict]:
+    """
+    Function to simulate worst-case adversaries in toy environments.
+
+    Args:
+        state (np.array): Current state.
+        action (np.array): Current action.
+        timestep (int): Current timestep.
+        env_name (str): Name of the environment.
+        env (BaseOfflineEnv): Environment object.
+
+    Returns:
+        tuple: New state, reward, done, truncated, and info (incl. adversarial action).
+    """
     new_state_ind = -1
     adv_action = np.random.choice(2, 1)
     
@@ -73,27 +85,52 @@ def worst_case_env_step(
 
     new_state = np.eye(state.size)[new_state_ind] if new_state_ind != -1 else state
     return new_state, reward, done, False, {"adv_action": adv_action}
-
+  
 
 def evaluate_episode(
         env,
-        env_name,
-        state_dim,
-        act_dim,
-        action_type,
-        model,
-        model_type,
-        max_ep_len,
-        scale,
-        state_mean,
-        state_std,
-        target_return,
-        adv_act_dim=None,
-        normalize_states=False,
-        worst_case=True,
-        with_noise=False,
-        device='cpu',
-    ):
+        env_name: str,
+        state_dim: int,
+        act_dim: int,
+        action_type: str,
+        model: torch.nn.Module,
+        model_type: str,
+        max_ep_len: int,
+        scale: float,
+        state_mean: np.ndarray,
+        state_std: np.ndarray,
+        target_return: float,
+        adv_act_dim: int = None,
+        normalize_states: bool = False,
+        worst_case: bool = True,
+        with_noise: bool = False,
+        device: str = 'cpu',
+    ) -> tuple[float, int]:
+    """
+    Evaluate a single episode of the environment with the model.
+
+    Args:
+        env: The environment instance.
+        env_name (str): The name of the environment.
+        state_dim (int): Dimension of the state space.
+        act_dim (int): Dimension of the action space.
+        action_type (str): Type of action space ('discrete' or 'continuous').
+        model (torch.nn.Module): The model used for decision-making.
+        model_type (str): The type of model ('dt', 'adt', or 'bc').
+        max_ep_len (int): Maximum length of the episode.
+        scale (float): Scale for normalization of returns.
+        state_mean (np.ndarray): Mean of the states for normalization.
+        state_std (np.ndarray): Standard deviation of the states for normalization.
+        target_return (float): Target return value for the evaluation.
+        adv_act_dim (int, optional): Dimension of the adversarial action space. Default is None.
+        normalize_states (bool, optional): Whether to normalize the states. Default is False.
+        worst_case (bool, optional): Whether to use worst-case scenario for specific environments. Default is True.
+        with_noise (bool, optional): Whether to add noise to the state. Default is False.
+        device (str, optional): Device to run the model on. Default is 'cpu'.
+
+    Returns:
+        tuple: Episode return and episode length.
+    """
     model.eval()
     model.to(device=device)
 
@@ -107,8 +144,7 @@ def evaluate_episode(
     if not adv_act_dim:
         adv_act_dim = act_dim
 
-    # we keep all the histories on the device
-    # note that the latest action and reward will be "padding"
+    # Initialize histories and variables
     states = torch.from_numpy(state).reshape(1, state_dim).to(device=device, dtype=torch.float32)
     actions = torch.zeros((0, act_dim), device=device, dtype=torch.float32)
     adv_actions = torch.zeros((0, adv_act_dim), device=device, dtype=torch.float32)
@@ -116,14 +152,14 @@ def evaluate_episode(
     timesteps = torch.tensor(0, device=device, dtype=torch.long).reshape(1, 1)
     target_return = torch.tensor(target_return, device=device, dtype=torch.float32).reshape(1, 1)
 
-    # evaluate
+    # Evaluate episode
     episode_return, episode_length = 0, 0
+
     for t in range(max_ep_len):
-        # add padding
         actions = torch.cat([actions, torch.zeros((1, act_dim), device=device)], dim=0)
         adv_actions = torch.cat([adv_actions, torch.zeros((1, adv_act_dim), device=device)], dim=0)
         rewards = torch.cat([rewards, torch.zeros(1, device=device)])
-        
+
         if normalize_states:
             normalized_states = (states.to(dtype=torch.float32) - state_mean) / state_std
         else:
@@ -131,80 +167,70 @@ def evaluate_episode(
         
         if model_type == 'dt':
             action = model.get_action(
-                states=normalized_states.to(dtype=torch.float32), 
+                states=normalized_states.to(dtype=torch.float32),
                 actions=actions.to(dtype=torch.float32),
                 rewards=rewards.to(dtype=torch.float32),
                 returns_to_go=target_return.to(dtype=torch.float32),
                 timesteps=timesteps.to(dtype=torch.long),
                 batch_size=1
-            )
-            action = action[0, -1]
+            )[0, -1]
         elif model_type == 'adt':
             action = model.get_action(
-                states=normalized_states.to(dtype=torch.float32), 
+                states=normalized_states.to(dtype=torch.float32),
                 actions=actions.to(dtype=torch.float32),
                 adv_actions=adv_actions.to(dtype=torch.float32),
                 rewards=rewards.to(dtype=torch.float32),
                 returns_to_go=target_return.to(dtype=torch.float32),
                 timesteps=timesteps.to(dtype=torch.long),
                 batch_size=1
-            )
-            action = action[0, -1]
+            )[0, -1]
         elif model_type == "bc":
             action = model.get_action(
-                states=normalized_states.to(dtype=torch.float32), 
+                states=normalized_states.to(dtype=torch.float32),
                 actions=actions.to(dtype=torch.float32),
                 rewards=rewards.to(dtype=torch.float32),
             )
 
+        # Handle discrete and continuous action spaces
         if action_type == 'discrete':
-            # sample action
             act_probs = F.softmax(action, dim=-1)
             action = Categorical(probs=act_probs).sample()
-            # make the action one hot
             one_hot_action = torch.zeros(1, act_dim).float()
             one_hot_action[0, action] = 1
             actions[-1] = one_hot_action
         else:
             actions[-1] = action
-        
+
         action = action.detach().cpu().numpy()
 
-        if (
-            worst_case and 
-            env_name in ["gambling", "toy", "mstoy"]
-        ):
-            state, reward, terminated, truncated, infos = worst_case_env_step(
-                state, action, t, env_name, env
-            )
+        if worst_case and env_name in ["gambling", "toy", "mstoy"]:
+            state, reward, terminated, truncated, infos = worst_case_env_step(state, action, t, env_name, env)
         else:
             state, reward, terminated, truncated, infos = env.step(action)
+
         done = terminated or truncated
 
+        # Handle adversarial action
         if action_type == 'discrete':
             one_hot_adv_action = torch.zeros(1, adv_act_dim).float()
-            if infos != {}:
-                adv_a = infos["adv"] if "adv" in infos else infos["adv_action"]
+            adv_a = infos.get("adv", infos.get("adv_action", None))
+            if adv_a is not None:
                 one_hot_adv_action[0, adv_a] = 1
             adv_actions[-1] = one_hot_adv_action
         else:
-            adv_action = infos["adv"] if "adv" in infos else infos["adv_action"]
-            adv_actions[-1] = torch.from_numpy(adv_action)
+            adv_action = infos.get("adv", infos.get("adv_action", None))
+            if adv_action is not None:
+                adv_actions[-1] = torch.from_numpy(adv_action)
 
+        # Update states, rewards, and timesteps
         cur_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
         states = torch.cat([states, cur_state], dim=0)
         rewards[-1] = reward
 
-        pred_return = target_return[0,-1] - (reward/scale)
-        
-        target_return = torch.cat(
-            [target_return, pred_return.reshape(1, 1)], dim=1
-        )
-        
-        timesteps = torch.cat(
-            [timesteps,
-             torch.ones((1, 1), device=device, dtype=torch.long) * (t+1)], dim=1
-        )
+        pred_return = target_return[0, -1] - (reward / scale)
+        target_return = torch.cat([target_return, pred_return.reshape(1, 1)], dim=1)
+
+        timesteps = torch.cat([timesteps, torch.ones((1, 1), device=device, dtype=torch.long) * (t + 1)], dim=1)
 
         episode_return += reward
         episode_length += 1
@@ -216,27 +242,52 @@ def evaluate_episode(
 
 
 def evaluate(
-        env_name,
-        task, 
-        num_eval_episodes,
-        state_dim, 
-        act_dim, 
-        adv_act_dim,
-        action_type,
-        model, 
-        model_type,
-        max_ep_len, 
-        scale, 
-        state_mean, 
-        state_std,
-        target_return,
-        batch_size=1, 
-        normalize_states=True,
-        device='cpu'
-    ):
+        env_name: str,
+        task,
+        num_eval_episodes: int,
+        state_dim: int,
+        act_dim: int,
+        adv_act_dim: int,
+        action_type: str,
+        model: torch.nn.Module,
+        model_type: str,
+        max_ep_len: int,
+        scale: float,
+        state_mean: np.ndarray,
+        state_std: np.ndarray,
+        target_return: float,
+        batch_size: int = 1,
+        normalize_states: bool = True,
+        device: str = 'cpu'
+    ) -> tuple[list[float], list[int]]:
+    """
+    Evaluate the model over multiple episodes.
+
+    Args:
+        env_name (str): The name of the environment.
+        task: The task instance.
+        num_eval_episodes (int): Number of evaluation episodes.
+        state_dim (int): Dimension of the state space.
+        act_dim (int): Dimension of the action space.
+        adv_act_dim (int): Dimension of the adversarial action space.
+        action_type (str): Type of action space ('discrete' or 'continuous').
+        model (torch.nn.Module): The model used for decision-making.
+        model_type (str): The type of model ('dt', 'adt', or 'bc').
+        max_ep_len (int): Maximum length of each episode.
+        scale (float): Scale for normalization of returns.
+        state_mean (np.ndarray): Mean of the states for normalization.
+        state_std (np.ndarray): Standard deviation of the states for normalization.
+        target_return (float): Target return value for the evaluation.
+        batch_size (int, optional): Batch size for the evaluation. Default is 1.
+        normalize_states (bool, optional): Whether to normalize the states. Default is True.
+        device (str, optional): Device to run the model on. Default is 'cpu'.
+
+    Returns:
+        tuple: List of returns and lengths for each episode.
+    """
     test_env = task.test_env_cls()
     if env_name == "connect_four":
-        test_env = GridWrapper(test_env) 
+        test_env = GridWrapper(test_env)
 
     returns, lengths = [], []
     for _ in tqdm(range(num_eval_episodes)):

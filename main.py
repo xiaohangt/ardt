@@ -22,7 +22,9 @@ MUJOCO_TARGETS_DICT = {'halfcheetah': [2000, 3000], 'hopper': [500, 1000], 'walk
 
 
 def set_seed_everywhere(seed: int, env: int | None = None):
-    # Set seed for every possible source of randomness
+    """
+    Set seed for every possible source of randomness
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -38,6 +40,9 @@ def process_c4_trajs(
         traj_len: int, 
         added_data_name: str
     ) -> list[Trajectory]:
+    """
+    Process Connect Four trajectories to conform to desired format.
+    """
     # Limit episode length
     task.trajs = task.trajs[:traj_len]
     trajs = task.trajs 
@@ -63,9 +68,29 @@ def load_env(
         test_adv: str = '0.0', 
         env_alpha: float = 0.1
     ) -> tuple[gym.Env, list[Trajectory], dict]:
+    """
+    Load environment and trajectories.
+
+    Args:
+        env_name: Name of the environment.
+        traj_len: Number of trajectories to load.
+        data_name: Name of the dataset.
+        added_data_name: Name of the dataset to add.
+        added_data_prop: Proportion of added data.
+        test_adv: Adversarial parameter.
+        env_alpha: Environmental parameter.
+    
+    Returns:
+        env: Gym environment.
+        trajs: List of trajectories.
+        env_params: Dictionary of environment parameters.
+    """
     print(f'Loading task: {env_name}')
+
     if 'connect_four' in env_name:
-        task = ConnectFourOfflineEnv(data_name=data_name, test_regen_prob=eval(test_adv))
+        task = ConnectFourOfflineEnv(
+            data_name=data_name, test_regen_prob=eval(test_adv)
+        )
         env = GridWrapper(task.env_cls())
         trajs = process_c4_trajs(
             task=task,
@@ -75,7 +100,7 @@ def load_env(
         env_params = {
             "task": task, 
             "max_ep_len": 22, 
-            "env_targets": [1, 1.5], 
+            "env_targets": [1, 1.5, 2], 
             "scale": 10, 
             "action_type": "discrete"
         }
@@ -97,7 +122,7 @@ def load_env(
         env_params = {
             "task": task, 
             "max_ep_len": 5, 
-            "env_targets": list(np.arange(0, 6.01, 0.5)) + [10], 
+            "env_targets": list(np.arange(0, 6.01, 0.5)), 
             "scale": 5, 
             "action_type": "discrete"
         }
@@ -108,7 +133,7 @@ def load_env(
         env_params = {
             "task": task, 
             "max_ep_len": 5, 
-            "env_targets": list(np.arange(0, 7.01, 0.5)) + [10], 
+            "env_targets": list(np.arange(0, 7.01, 0.5)), 
             "scale": 5, 
             "action_type": "discrete"
         }
@@ -128,6 +153,7 @@ def load_env(
             "scale": 1000, 
             "action_type": "continuous"
         }
+    
     print(f"Finished loading task with {len(trajs)} trajectories.")
     return (
         env,
@@ -138,6 +164,8 @@ def load_env(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    # General arguments
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--data_name', type=str, required=True)
     parser.add_argument('--added_data_name', type=str, default='')
@@ -147,12 +175,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, required=True)
     parser.add_argument('--n_cpu', type=int, default=1)
 
-    # for return transformation: 
+    # For returns transformation: 
     parser.add_argument('--algo', type=str, required=True, choices=['ardt', 'dt', 'esper', 'bc'])
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--is_simple_maxmin_model', action='store_true')
 
-    # for decision transformer:
+    # For decision transformer training:
     parser.add_argument('--checkpoint_dir', type=str, default=None)
     parser.add_argument('--is_collect_data_only', action='store_true')
     parser.add_argument('--is_relabeling_only', action='store_true')
@@ -181,13 +209,13 @@ if __name__ == '__main__':
     parser.add_argument('--rtg_seq', type=bool, default=True)
     parser.add_argument('--normalize_states', action='store_true')
     
-    # for decision transformer evaluation:
+    # For decision transformer evaluation:
     parser.add_argument('--env_data_dir', type=str, default="")
     parser.add_argument('--test_adv', type=str, default='0.8')
     parser.add_argument('--env_alpha', type=float, default=0.1)
     parser.add_argument('--num_eval_episodes', type=int, default=100)
     
-    # process args
+    # Process args and check for consistency
     args = parser.parse_args()
     variant = vars(args)
     if variant['algo'] == 'bc':
@@ -207,11 +235,13 @@ if __name__ == '__main__':
         test_adv=variant['test_adv'],
         env_alpha=variant['env_alpha']
     )
-
+    
     if variant['is_collect_data_only']:
+        # if the flag is set to only collect data, exit after loading the environment
         sys.exit(0)
 
     if not variant['is_training_only']:
+        # if not only training the protagonist, (re-)do the relabeling process
         print("############### Relabeling Returns Data ###############")
         print(f"Will save relabeled file to {variant['ret_file']}")
     
@@ -241,10 +271,12 @@ if __name__ == '__main__':
             raise NotImplementedError('Chosen relabeling algorithm unknown.')
 
     if not variant['is_relabeling_only']:
+        # if not only relabeling trajectory returns, start the protagonist training process
         print("############### Training Decision Transformer ###############")
 
-        test_advs = [variant['test_adv']]
+        test_advs = []
         if not variant['is_training_only']:
+            test_advs = [variant['test_adv']]
             if variant['env_name'] in ['halfcheetah', 'hopper', 'walker2d']:
                 if "env" not in variant['test_adv']:
                     test_advs = [variant['test_adv'][:-1] + str(adv) for adv in range(8)]
@@ -255,14 +287,13 @@ if __name__ == '__main__':
             variant['test_adv'] = test_adv
             if variant['env_name'] in {'halfcheetah', 'hopper', 'walker2d'}:
                 env.reset_adv_agent(variant['test_adv'], variant['device'])
-            
-            if not variant['is_relabeling_only']:
-                experiment(
-                    env_params['task'],
-                    env,
-                    env_params['max_ep_len'],
-                    env_params['env_targets'],
-                    env_params['scale'],
-                    env_params['action_type'],
-                    variant=vars(args)
-                )
+
+            experiment(
+                env_params['task'],
+                env,
+                env_params['max_ep_len'],
+                env_params['env_targets'],
+                env_params['scale'],
+                env_params['action_type'],
+                variant=vars(args)
+            )

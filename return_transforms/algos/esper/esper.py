@@ -19,10 +19,25 @@ def esper(
         train_args: dict,
         device: str,
         n_cpu: int
-    ):
+    ) -> list:
+    """
+    Function to perform training using the ESPER algorithm for learning expected returns.
+
+    Args:
+        trajs (list[Trajectory]): List of trajectories containing observation, action, and return data.
+        action_space (gym.spaces.Space): Action space from the environment (discrete or continuous).
+        dynamics_model_args (dict): Arguments for configuring the dynamics model.
+        cluster_model_args (dict): Arguments for configuring the cluster model.
+        train_args (dict): Training arguments such as learning rates, epochs, and batch size.
+        device (str): Device to use for training ('cpu' or 'cuda').
+        n_cpu (int): Number of CPUs for parallel data loading.
+
+    Returns:
+        avg_returns (list): List of learned return labels after training.
+    """
     # Initialize state and action spaces
-    obs_size = np.prod(trajs[0].obs[0].shape)
     if isinstance(action_space, gym.spaces.Discrete):
+        obs_size = np.prod(trajs[0].obs[0].shape)
         action_size = action_space.n
         act_loss_fn = lambda pred, truth: F.cross_entropy(
             pred.view(-1, pred.shape[-1]),
@@ -31,11 +46,12 @@ def esper(
         )
         act_type = 'discrete'
     else:
+        obs_size = np.prod(np.array(trajs[0].obs[0]).shape)
         action_size = action_space.shape[0]
         act_loss_fn = lambda pred, truth: ((pred - truth) ** 2).mean(dim=-1)
         act_type = 'continuous'
 
-    # Set up dataset
+    # Set up dataset for training
     max_len = max([len(traj.obs) for traj in trajs]) + 1
     dataset = ESPERDataset(
         trajs, action_size, max_len, gamma=train_args['gamma'], act_type=act_type
@@ -46,7 +62,7 @@ def esper(
         num_workers=n_cpu
     )
 
-    # Set up the models
+    # Set up the models involved in the ESPER algorithm
     print('Creating models...')
     dynamics_model = DynamicsModel(
         obs_size,
@@ -70,7 +86,7 @@ def esper(
         cluster_model.parameters(), lr=float(train_args['cluster_model_lr'])
     )
 
-    # Calculate epoch markers
+    # Start training
     total_epochs = train_args['cluster_epochs'] + train_args['return_epochs']
     ret_stage = train_args['cluster_epochs']
 
@@ -86,6 +102,7 @@ def esper(
         total_dyn_loss = 0
         total_baseline_dyn_loss = 0
         total_batches = 0
+
         for obs, acts, ret in pbar:
             total_batches += 1
             
@@ -111,7 +128,7 @@ def esper(
 
             # Calculate the losses
             ret_loss = ((ret_pred.view(batch_size, seq_len) - ret.view(batch_size, seq_len)) ** 2).mean()
-            act_loss = act_loss_fn(act_pred, acts).view(batch_size, t)[~acts_mask].mean()
+            act_loss = act_loss_fn(act_pred, acts).view(batch_size, seq_len)[~acts_mask].mean()
             dynamics_loss = ((pred_next_obs - next_obs) ** 2)[~obs_mask].mean()
 
             # Calculate the total loss
@@ -146,10 +163,14 @@ def esper(
             advantage = total_baseline_dyn_loss - total_dyn_loss
 
             pbar.set_description(
-                f"Epoch {epoch} | Loss: {total_loss / total_batches:.4f} | Act Loss: {total_act_loss / total_batches:.4f} | Ret Loss: {total_ret_loss / total_batches:.4f} | Dyn Loss: {total_dyn_loss / total_batches:.4f} | Advantage: {advantage / total_batches:.4f}"
+                f"Epoch {epoch} | Loss: {total_loss / total_batches:.4f} "
+                f"| Act Loss: {total_act_loss / total_batches:.4f} " 
+                f"| Ret Loss: {total_ret_loss / total_batches:.4f} " 
+                f"| Dyn Loss: {total_dyn_loss / total_batches:.4f} "
+                f"| Advantage: {advantage / total_batches:.4f}"
             )
 
-    # Get the learned return labels
+    # Collect and return the learned returns for relabeling
     avg_returns = []
     for traj in tqdm(trajs):
         labels = learned_labels(
