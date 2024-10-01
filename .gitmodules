@@ -1,0 +1,3 @@
+[submodule "arrl"]
+	path = arrl
+	url = https://github.com/afonsosamarques/arrl
