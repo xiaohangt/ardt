@@ -2,8 +2,6 @@
 *.png
 *.pdf
 *.csv
-stochastic_offline_envs/
-arrl/
 offline_data/
 data/
 results/
