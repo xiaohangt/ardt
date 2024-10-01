@@ -1,3 +1,6 @@
 [submodule "arrl"]
 	path = arrl
 	url = https://github.com/afonsosamarques/arrl
+[submodule "stochastic_offline_envs"]
+	path = stochastic_offline_envs
+	url = https://github.com/xiaohangt/stochastic_offline_envs
