@@ -7,7 +7,7 @@ train_args:
   model_wd: 0.0001
   batch_size: 128
   mse_epochs: 6
-  maxmin_epochs: 10
+  maxmin_epochs: 12
   alpha: 0.01
   leaf_weight: 0.9
   ret_obs_act_model_args:
