@@ -72,12 +72,14 @@ class ESPERDataset(IterableDataset):
             padded_obs[-obs.shape[0]:] = obs
             padded_acts[-obs.shape[0]:] = actions
             padded_rets[-obs.shape[0]:] = np.array(rets)
+            true_seq_length = obs.shape[0]
 
             # Yield the padded trajectory segments as tensors
             yield (
                 torch.tensor(padded_obs).float(),
                 torch.tensor(padded_acts).float(),
-                torch.tensor(padded_rets).float()
+                torch.tensor(padded_rets).float(),
+                torch.tensor(true_seq_length).float()
             )
 
     def __len__(self):

@@ -131,39 +131,41 @@ def maxmin(
         total_adv_loss = 0
         total_batches = 0
 
-        for obs, acts, adv_acts, ret in pbar:
+        for obs, acts, adv_acts, ret, seq_len in pbar:
             total_batches += 1
             qsa_pr_optimizer.zero_grad()
             qsa_adv_optimizer.zero_grad()
             
+            # Adjust for toy environment
+            if is_toy:
+                obs, acts, adv_acts, ret = (
+                    obs[:, :-1], acts[:, :-1], adv_acts[:, :-1], ret[:, :-1]
+                )
+            if seq_len.max() >= obs.shape[1]:
+                seq_len -= 1
+
             # Set up variables
             batch_size = obs.shape[0]
-            seq_len = obs.shape[1]
+            obs_len = obs.shape[1]
             
-            obs = obs.view(batch_size, seq_len, -1).to(device)
+            obs = obs.view(batch_size, obs_len, -1).to(device)
             acts = acts.to(device)
             adv_acts = adv_acts.to(device)
             acts_mask = (acts.sum(dim=-1) == 0)
             ret = (ret / train_args['scale']).to(device)
+            seq_len = seq_len.to(device)
 
             # Adjustment for initial prompt learning
             obs[:, 0] = obs[:, 1]
             ret[:, 0] = ret[:, 1]
             acts_mask[:, 0] = False
 
-            # Adjustment for toy environment
-            if is_toy:
-                obs, acts, adv_acts, acts_mask, ret = (
-                    obs[:, :-1], acts[:, :-1], adv_acts[:, :-1], acts_mask[:, :-1], ret[:, :-1]
-                )
-                seq_len -= 1
-
             # Calculate the losses at the different tages
             if epoch < mse_epochs:
                 # MSE-based learning stage to learn general loss landscape
-                ret_pr_pred = qsa_pr_model(obs, acts).view(batch_size, seq_len)
+                ret_pr_pred = qsa_pr_model(obs, acts).view(batch_size, obs_len)
                 ret_pr_loss = (((ret_pr_pred - ret) ** 2) * ~acts_mask).mean()
-                ret_adv_pred = qsa_adv_model(obs, acts, adv_acts).view(batch_size, seq_len)
+                ret_adv_pred = qsa_adv_model(obs, acts, adv_acts).view(batch_size, obs_len)
                 ret_adv_loss = (((ret_adv_pred - ret) ** 2) * ~acts_mask).mean()
                 # Backpropagate
                 ret_pr_loss.backward()
@@ -196,7 +198,7 @@ def maxmin(
                     train_args['alpha']
                 )
                 ret_leaf_loss = (
-                    (ret_adv_pred[range(batch_size), -1].flatten() - ret[range(batch_size), -1]) ** 2
+                    (ret_adv_pred[range(batch_size), seq_len].flatten() - ret[range(batch_size), seq_len]) ** 2
                 ).mean()
                 ret_adv_loss = ret_tree_loss * (1 - train_args['leaf_weight']) + ret_leaf_loss * train_args['leaf_weight']                    
                 # Backpropagate

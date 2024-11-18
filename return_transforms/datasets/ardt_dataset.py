@@ -99,13 +99,15 @@ class ARDTDataset(IterableDataset):
             padded_acts[1:obs.shape[0] + 1] = actions
             padded_adv_acts[1:obs.shape[0] + 1] = adv_actions
             padded_rets[1:obs.shape[0] + 1] = np.array(rets)
+            true_seq_length = obs.shape[0]
 
             # Yield the padded trajectory segments as tensors
             yield (
                 torch.tensor(padded_obs).float(),
                 torch.tensor(padded_acts).float(),
                 torch.tensor(padded_adv_acts).float(),
-                torch.tensor(padded_rets).float()
+                torch.tensor(padded_rets).float(),
+                torch.tensor(true_seq_length).int()
             )
 
     def __len__(self):

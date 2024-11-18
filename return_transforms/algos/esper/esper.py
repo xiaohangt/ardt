@@ -103,15 +103,15 @@ def esper(
         total_baseline_dyn_loss = 0
         total_batches = 0
 
-        for obs, acts, ret in pbar:
+        for obs, acts, ret, seq_len in pbar:
             total_batches += 1
             
             # Set up variables
             batch_size = obs.shape[0]
-            seq_len = obs.shape[1]
+            obs_len = obs.shape[1]
 
             obs = obs.to(device)
-            obs_mask = (obs.view(batch_size, seq_len, -1)[:, :-1].sum(dim=-1) == 0)
+            obs_mask = (obs.view(batch_size, obs_len, -1)[:, :-1].sum(dim=-1) == 0)
             acts = acts.to(device)
             acts_mask = (acts.sum(dim=-1) == 0)
             ret = ret.to(device) / train_args['scale']
@@ -127,8 +127,8 @@ def esper(
             )
 
             # Calculate the losses
-            ret_loss = ((ret_pred.view(batch_size, seq_len) - ret.view(batch_size, seq_len)) ** 2).mean()
-            act_loss = act_loss_fn(act_pred, acts).view(batch_size, seq_len)[~acts_mask].mean()
+            ret_loss = ((ret_pred.view(batch_size, obs_len) - ret.view(batch_size, obs_len)) ** 2).mean()
+            act_loss = act_loss_fn(act_pred, acts).view(batch_size, obs_len)[~acts_mask].mean()
             dynamics_loss = ((pred_next_obs - next_obs) ** 2)[~obs_mask].mean()
 
             # Calculate the total loss
