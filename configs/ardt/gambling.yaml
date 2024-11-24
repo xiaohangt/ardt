@@ -3,11 +3,11 @@ normalize: false
 train_args:
   gamma: 1.0
   scale: 5.0
-  model_lr: 0.0001
-  model_wd: 0.00001
+  model_lr: 0.001
+  model_wd: 0.0001
   batch_size: 128
-  mse_epochs: 2
-  maxmin_epochs: 4
+  mse_epochs: 6
+  maxmin_epochs: 12
   alpha: 0.01
   leaf_weight: 0.9
   ret_obs_act_model_args:

@@ -1,3 +1,4 @@
+from functools import partial
 import pickle
 
 import numpy as np
@@ -20,7 +21,7 @@ class EvalFnGenerator:
         act_dim (int): Dimension of the action space.
         adv_act_dim (int): Dimension of the adversary action space.
         action_type (str): Type of action space.
-        traj_len (int): Length of the trajectory.
+        max_traj_len (int): Length of the trajectory.
         scale (bool): Whether to scale the states.
         state_mean (np.ndarray): Mean of the states.
         state_std (np.ndarray): Standard deviation of the states.
@@ -44,7 +45,7 @@ class EvalFnGenerator:
             act_dim: int,
             adv_act_dim: int,
             action_type: str,
-            traj_len: int,
+            max_traj_len: int,
             scale: float,
             state_mean: float,
             state_std: float,
@@ -66,11 +67,10 @@ class EvalFnGenerator:
         self.act_dim = act_dim
         self.adv_act_dim = adv_act_dim
         self.action_type = action_type
-        self.traj_len = traj_len
+        self.max_traj_len = max_traj_len
         self.scale = scale
         self.state_mean = state_mean
         self.state_std = state_std
-        self.target_return = None
         self.batch_size = batch_size
         self.normalize_states = normalize_states
         self.device = device
@@ -93,7 +93,7 @@ class EvalFnGenerator:
             added_dataset_prop: float
         ) -> str:
         env = self.task.test_env_cls()
-        env_alpha = env.env_alpha if hasattr(env, 'env_alpha') else None
+        env_alpha = env.env_alpha if hasattr(env, 'env_alpha') else 0.0
 
         test_adv_name = (
             test_adv_name[test_adv_name.rfind('/') + 1:] 
@@ -109,17 +109,17 @@ class EvalFnGenerator:
                 else dataset_name
             )
             return (
-                f'results/{returns_filename}_traj{self.traj_len}_model/model_type/_adv{test_adv_name}_' +
-                f'alpha{env_alpha}_False_{self.target_return}_{self.seed}.pkl'
+                f'results/{returns_filename}_traj{self.max_traj_len}_model/model_type/_adv{test_adv_name}_' +
+                f'alpha{env_alpha}_False_target_return_{self.seed}.pkl'
             )
         else:
             return (
                 f'results/{algo_name}_original_{dataset_name}_{added_dataset_name}_' +
-                f'{added_dataset_prop}_traj{self.traj_len}_model/model_type/_' + 
-                f'adv{test_adv_name}_alpha{env_alpha}_False_{self.target_return}_{self.seed}.pkl'
+                f'{added_dataset_prop}_traj{self.max_traj_len}_model/model_type/_' + 
+                f'adv{test_adv_name}_alpha{env_alpha}_False_target_return_{self.seed}.pkl'
             )
 
-    def _eval_fn(self, model: torch.nn.Module, model_type: str) -> dict:
+    def _eval_fn(self, target_return: int, model: torch.nn.Module, model_type: str) -> dict:
         returns, lengths = evaluate(
             self.env_name,
             self.task,
@@ -130,33 +130,32 @@ class EvalFnGenerator:
             self.action_type,
             model, 
             model_type,
-            self.traj_len,
+            self.max_traj_len,
             self.scale, 
             self.state_mean, 
             self.state_std,
-            self.target_return,
+            target_return,
             batch_size=self.batch_size, 
             normalize_states=self.normalize_states,
             device=self.device
         )
         
         show_res_dict = {
-            f'target_{self.target_return}_return_mean': np.mean(returns),
-            f'target_{self.target_return}_return_std': np.std(returns),
+            f'target_{target_return}_return_mean': np.mean(returns),
+            f'target_{target_return}_return_std': np.std(returns),
         }
 
         result_dict = {
-            f'target_{self.target_return}_return_mean': np.mean(returns),
-            f'target_{self.target_return}_return_std': np.std(returns),
-            f'target_{self.target_return}_length_mean': np.mean(lengths),
-            f'target_{self.target_return}_length_std': np.std(lengths),
+            f'target_{target_return}_return_mean': np.mean(returns),
+            f'target_{target_return}_return_std': np.std(returns),
+            f'target_{target_return}_length_mean': np.mean(lengths),
+            f'target_{target_return}_length_std': np.std(lengths),
         }
 
-        run_storage_path = self.storage_path.replace("/model_type/", model_type)          
+        run_storage_path = self.storage_path.replace("/model_type/", model_type).replace('_target_return_', f'_{target_return}_')      
         pickle.dump(result_dict, open(run_storage_path, 'wb'))
         print("Evaluation results", show_res_dict, "saved to ", run_storage_path)
         return show_res_dict
 
-    def generate_eval_fn(self, tgt_return: int) -> '_eval_fn':
-        self.target_return = tgt_return
-        return self._eval_fn
+    def generate_eval_fn(self, target_return: int) -> '_eval_fn':
+        return partial(self._eval_fn, target_return=target_return)

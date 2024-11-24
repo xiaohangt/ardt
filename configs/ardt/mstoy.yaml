@@ -2,7 +2,7 @@ method: ardt
 normalize: false
 train_args:
   gamma: 1.0
-  scale: 1.0
+  scale: 5.0
   model_lr: 0.001
   model_wd: 0.0001
   batch_size: 128

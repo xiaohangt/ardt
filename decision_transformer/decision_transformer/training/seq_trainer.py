@@ -8,7 +8,7 @@ class SequenceTrainer(Trainer):
         """
         Train a DT model for one training step.
         """
-        states, actions, rewards, dones, returns, timesteps, attention_mask = self.get_batch()
+        states, actions, rewards, dones, returns, timesteps, attention_mask = self._get_batch()
         action_targets = torch.clone(actions)
 
         _, action_preds, _ = self.model.forward(

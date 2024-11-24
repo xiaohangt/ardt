@@ -101,7 +101,7 @@ def load_env(
             "task": task, 
             "max_ep_len": 22, 
             "env_targets": [1, 1.5, 2], 
-            "scale": 10, 
+            "scale": 1.0, 
             "action_type": "discrete"
         }
     elif env_name == 'gambling':
@@ -112,7 +112,7 @@ def load_env(
             "task": task, 
             "max_ep_len": 5, 
             "env_targets": list(np.arange(-15, 5.01, 0.5)), 
-            "scale": 5, 
+            "scale": 5.0, 
             "action_type": "discrete"
         }
     elif env_name == 'toy':
@@ -123,7 +123,7 @@ def load_env(
             "task": task, 
             "max_ep_len": 5, 
             "env_targets": list(np.arange(0, 6.01, 0.5)), 
-            "scale": 5, 
+            "scale": 5.0, 
             "action_type": "discrete"
         }
     elif "mstoy" in env_name:
@@ -133,8 +133,8 @@ def load_env(
         env_params = {
             "task": task, 
             "max_ep_len": 5, 
-            "env_targets": list(np.arange(0, 7.01, 0.5)), 
-            "scale": 5, 
+            "env_targets": list(np.arange(0, 10.01, 0.5)), 
+            "scale": 5.0, 
             "action_type": "discrete"
         }
     elif env_name in ['halfcheetah', 'hopper', 'walker2d']:
@@ -150,7 +150,7 @@ def load_env(
             "task": task, 
             "max_ep_len": 1000, 
             "env_targets": MUJOCO_TARGETS_DICT[env_name], 
-            "scale": 1000, 
+            "scale": 1000.0, 
             "action_type": "continuous"
         }
     

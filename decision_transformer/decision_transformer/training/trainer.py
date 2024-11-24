@@ -80,6 +80,7 @@ class Trainer:
             context_size: int,
             with_adv_action: bool,
             env_name: str,
+            num_trajectories: int,
             trajectories: list[Trajectory],
             trajectories_sorted_idx: np.array,
             trajectories_sorted_probs: np.array,
@@ -101,6 +102,7 @@ class Trainer:
         
         # Data-related parameters
         self.env_name = env_name
+        self.num_trajectories = num_trajectories
         self.trajectories = trajectories
         self.trajectories_sorted_idx = trajectories_sorted_idx
         self.trajectories_sorted_probs = trajectories_sorted_probs
@@ -124,7 +126,7 @@ class Trainer:
             ce_loss = torch.nn.CrossEntropyLoss()
             return lambda a_hat, a: ce_loss(a_hat, torch.argmax(a, dim=-1))
 
-    def get_batch(
+    def _get_batch(
             self,  
             device: str = "cpu"
         ):
@@ -133,7 +135,7 @@ class Trainer:
         """
         # Reweight trajectory sampling based on sorted probabilities
         batch_idx = np.random.choice(
-            np.arange(len(self.trajectories)),
+            np.arange(self.num_trajectories),
             size=self.train_configs.batch_size,
             p=self.trajectories_sorted_probs,
             replace=True,
@@ -150,7 +152,7 @@ class Trainer:
             if self.env_name not in ["halfcheetah", "hopper", "walker2d"]:
                 si = 0
             else:
-                si = np.random.randint(0, traj['rewards'].shape[0] - 1)
+                si = np.random.randint(0, traj['rewards'].shape[0])
 
             # get sequences from dataset
             if self.env_name == "connect_four":
@@ -162,9 +164,9 @@ class Trainer:
             adv_a.append(traj['adv_actions'][si:si + self.context_size].reshape(1, -1, self.train_configs.adv_action_dim))
             r.append(traj['rewards'][si:si + self.context_size].reshape(1, -1, 1))
             d.append(traj.get('terminals', traj['dones'])[si:si + self.context_size].reshape(1, -1))
+            rtg.append(traj['rtg'][si:si + self.context_size].reshape(1, -1, 1))
             timesteps.append(np.arange(si, si + s[-1].shape[1]).reshape(1, -1))
             timesteps[-1][timesteps[-1] >= self.train_configs.episode_length] = self.train_configs.episode_length - 1
-            rtg.append(traj['rtg'][si:si + self.context_size].reshape(1, -1, 1))
 
             # apply padding and normalisation
             tlen = s[-1].shape[1]
@@ -208,7 +210,8 @@ class Trainer:
 
         # Training loop
         for _ in tqdm(range(num_steps)):
-            train_loss = self.train_step()  # Perform a training step
+            # Perform a training step
+            train_loss = self.train_step()
             train_losses.append(train_loss)
             
             # Step the learning rate scheduler if it is defined
@@ -224,7 +227,7 @@ class Trainer:
         eval_start = time.time()
         self.model.eval()
         for eval_fn in self.eval_fns:
-            outputs = eval_fn(self.model, self.model_type)
+            outputs = eval_fn(model=self.model, model_type=self.model_type)
             for k, v in outputs.items():
                 logs[f'evaluation/{k}'] = v
 

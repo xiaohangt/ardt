@@ -29,7 +29,7 @@ def worst_case_env_step(
     Returns:
         tuple: New state, reward, done, truncated, and info (incl. adversarial action).
     """
-    new_state_ind = -1
+    new_state_idx = -1
     adv_action = np.random.choice(2, 1)
     
     _, reward, terminated, truncated, _ = env.step(action)
@@ -62,7 +62,7 @@ def worst_case_env_step(
                 reward = 4
                 done = True
             else:
-                new_state_ind = 1
+                new_state_idx = 1
                 reward = 0
                 adv_action = 0
         else:
@@ -75,7 +75,7 @@ def worst_case_env_step(
                 reward = 4
                 done = True
             else:
-                new_state_ind = 1
+                new_state_idx = 1
                 reward = 0
         else:
             reward = env.reward_list[action * 2 + (state.argmax() - 1) * 3]
@@ -83,7 +83,7 @@ def worst_case_env_step(
     else:
         raise RuntimeError("Environment Error.")
 
-    new_state = np.eye(state.size)[new_state_ind] if new_state_ind != -1 else state
+    new_state = np.eye(state.size)[new_state_idx] if new_state_idx != -1 else state
     return new_state, reward, done, False, {"adv_action": adv_action}
   
 
@@ -211,20 +211,19 @@ def evaluate_episode(
         done = terminated or truncated
 
         # Handle adversarial action
+        adv_a = infos.get("adv", infos.get("adv_action", None))
         if action_type == 'discrete':
             one_hot_adv_action = torch.zeros(1, adv_act_dim).float()
-            adv_a = infos.get("adv", infos.get("adv_action", None))
             if adv_a is not None:
                 one_hot_adv_action[0, adv_a] = 1
             adv_actions[-1] = one_hot_adv_action
         else:
-            adv_action = infos.get("adv", infos.get("adv_action", None))
-            if adv_action is not None:
-                adv_actions[-1] = torch.from_numpy(adv_action)
+            if adv_a is not None:
+                adv_actions[-1] = torch.from_numpy(adv_a)
 
         # Update states, rewards, and timesteps
-        cur_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
-        states = torch.cat([states, cur_state], dim=0)
+        curr_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
+        states = torch.cat([states, curr_state], dim=0)
         rewards[-1] = reward
 
         pred_return = target_return[0, -1] - (reward / scale)

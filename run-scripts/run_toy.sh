@@ -13,6 +13,6 @@ python main.py \
     --config "configs/${algo}/toy.yaml" \
     --checkpoint_dir "checkpoints/${algo}_toy_seed${seed}" \
     --model_type "dt" \
-    --K 2 \
+    --K 4 \
     --train_iters 1 \
     --num_steps_per_iter 10000

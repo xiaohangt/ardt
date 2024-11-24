@@ -58,7 +58,7 @@ def experiment(
         env_targets = env_targets[:1]
         
     # Dimensionality
-    state_dim = np.prod(env.observation_space.shape)
+    state_dim = int(np.prod(env.observation_space.shape))
     if action_type == 'discrete':
         act_dim = env.action_space.n
         adv_act_dim = env.adv_action_space.n
@@ -82,13 +82,15 @@ def experiment(
                 traj_dict[key] = np.array(cur_info)
 
         if "adv" in traj.infos[0]:
-            adv_a = np.array([info["adv"] if info else 0 for info in traj.infos])
+            adv_a = np.array([info["adv"] if info else -1 for info in traj.infos])
         elif "adv_action" in traj.infos[0]:
             adv_a = np.array([info["adv_action"] if info else 0 for info in traj.infos])
-        elif action_type == "discrete":
-            adv_a = np.zeros((len(traj_dict["actions"])))
         else:
-            adv_a = np.zeros((len(traj_dict["actions"]), adv_act_dim))
+            print("WARNING: No adv or adv_action in infos")
+            if action_type == "discrete":
+                adv_a = np.zeros((len(traj_dict["actions"])))
+            else:
+                adv_a = np.zeros((len(traj_dict["actions"]), adv_act_dim))
 
         if action_type == "discrete":
             traj_dict['adv_actions'] = np.zeros((len(traj_dict["actions"]), adv_act_dim))
@@ -123,18 +125,18 @@ def experiment(
     # Only train on top top_pct_traj trajectories (for %BC experiment)
     top_pct_traj = variant.get('top_pct_traj', 1.)
     num_timesteps = max(int(top_pct_traj * num_timesteps), 1)
-    sorted_inds = np.argsort(returns)
+    sorted_idx = np.argsort(returns)
     num_trajectories = 1
-    timesteps = traj_lens[sorted_inds[-1]]
-    ind = len(trajectories) - 2
+    timesteps = traj_lens[sorted_idx[-1]]
+    idx = len(trajectories) - 2
 
-    while ind >= 0 and timesteps + traj_lens[sorted_inds[ind]] <= num_timesteps:
-        timesteps += traj_lens[sorted_inds[ind]]
+    while idx >= 0 and timesteps + traj_lens[sorted_idx[idx]] <= num_timesteps:
+        timesteps += traj_lens[sorted_idx[idx]]
         num_trajectories += 1
-        ind -= 1
+        idx -= 1
 
-    sorted_inds = sorted_inds[-num_trajectories:]
-    p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+    sorted_idx = sorted_idx[-num_trajectories:]
+    p_sample = traj_lens[sorted_idx] / sum(traj_lens[sorted_idx])
 
     # Some logging
     print('=' * 50)
@@ -269,8 +271,9 @@ def experiment(
             context_size=variant['K'],
             with_adv_action=False,
             env_name=env_name,
+            num_trajectories=num_trajectories,
             trajectories=trajectories,
-            trajectories_sorted_idx=sorted_inds,
+            trajectories_sorted_idx=sorted_idx,
             trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
@@ -285,8 +288,9 @@ def experiment(
             context_size=variant['K'],
             with_adv_action=True,
             env_name=env_name,
+            num_trajectories=num_trajectories,
             trajectories=trajectories,
-            trajectories_sorted_idx=sorted_inds,
+            trajectories_sorted_idx=sorted_idx,
             trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
@@ -301,15 +305,16 @@ def experiment(
             context_size=variant['K'],
             with_adv_action=False,
             env_name=env_name,
+            num_trajectories=num_trajectories,
             trajectories=trajectories,
-            trajectories_sorted_idx=sorted_inds,
+            trajectories_sorted_idx=sorted_idx,
             trajectories_sorted_probs=p_sample,
             train_configs=train_configs,
             eval_fns=[eval_fn_generator.generate_eval_fn(tgt) for tgt in env_targets],
         )
 
     # Load learned returns-to-go
-    if variant['algo'] in ['radt', 'esper']:
+    if variant['algo'] in ['ardt', 'esper']:
         assert variant['ret_file']
         with open(f"{variant['ret_file']}.pkl", 'rb') as f:
             rtg_dict = pickle.load(f)
@@ -340,4 +345,4 @@ def experiment(
     if not variant['is_training_only']:
         for tgt in env_targets:
             eval_fn = eval_fn_generator.generate_eval_fn(tgt)
-            print(tgt, eval_fn(model, model_type))
+            print(tgt, eval_fn(model=model, model_type=model_type))
