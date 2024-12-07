@@ -1,4 +1,4 @@
-# Adversarial Robust Decision Transformer
+# Adversarially Robust Decision Transformer
 
 * You will need to clone the forked repository `stochastic_offline_envs` from [here](https://github.com/xiaohangt/stochastic_offline_envs).
 * You will also need to clone the forked repository `arrl` from [here](https://github.com/afonsosamarques/arrl).
